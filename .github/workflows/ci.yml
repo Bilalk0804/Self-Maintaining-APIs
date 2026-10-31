@@ -61,7 +61,9 @@ jobs:
           PGUSER: driftwatch
           PGPASSWORD: driftwatch
           PGDATABASE: driftwatch_ci
-        run: psql --set ON_ERROR_STOP=1 --file migrations/001JobQueue.sql
+        run: |
+          psql --set ON_ERROR_STOP=1 --file migrations/001JobQueue.sql
+          psql --set ON_ERROR_STOP=1 --file migrations/002NormalizeJobQueue.sql
 
       - name: Verify PostgreSQL migration
         env:
@@ -71,8 +73,8 @@ jobs:
           PGPASSWORD: driftwatch
           PGDATABASE: driftwatch_ci
         run: |
-          test "$(psql --tuples-only --no-align --command "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('job', 'job_run');")" = "2"
-          psql --command "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'job' ORDER BY indexname;"
+          test "$(psql --tuples-only --no-align --command "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('job', 'job_state', 'job_payload', 'job_run');")" = "4"
+          psql --command "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'job_state' ORDER BY indexname;"
 
       - name: Build package
         run: uv build

@@ -510,7 +510,13 @@ CREATE TABLE job (
     kind            text NOT NULL,                 -- poll_source | diff_snapshot | ...
     -- dedup key: enqueueing the same logical job twice is a no-op
     idempotency_key text NOT NULL,
-    payload         jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT job_idempotency_uq UNIQUE (idempotency_key)
+);
+
+-- Hot queue state is isolated from the stable identity and large payload.
+CREATE TABLE job_state (
+    job_id          uuid PRIMARY KEY REFERENCES job(id) ON DELETE CASCADE,
     priority        integer NOT NULL DEFAULT 100,
     status          text NOT NULL DEFAULT 'pending',
     attempts        integer NOT NULL DEFAULT 0,
@@ -518,14 +524,18 @@ CREATE TABLE job (
     run_after       timestamptz NOT NULL DEFAULT now(),
     locked_by       text,
     locked_at       timestamptz,
-    created_at      timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT job_status_ck CHECK (status IN (
+    CONSTRAINT job_state_status_ck CHECK (status IN (
         'pending', 'running', 'succeeded', 'failed', 'dead'
-    )),
-    CONSTRAINT job_idempotency_uq UNIQUE (idempotency_key)
+    ))
 );
 -- supports the SELECT ... FOR UPDATE SKIP LOCKED claim query
-CREATE INDEX job_claim_ix ON job (status, run_after, priority) WHERE status = 'pending';
+CREATE INDEX job_state_claim_ix ON job_state (status, run_after, priority)
+    WHERE status = 'pending';
+
+CREATE TABLE job_payload (
+    job_id          uuid PRIMARY KEY REFERENCES job(id) ON DELETE CASCADE,
+    payload         jsonb NOT NULL DEFAULT '{}'::jsonb
+);
 
 CREATE TABLE job_run (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -40,7 +40,7 @@ def test_enqueue_is_idempotent() -> None:
 
 def test_claim_uses_skip_locked() -> None:
     job_id = UUID("00000000-0000-0000-0000-000000000001")
-    connection = Connection((job_id, "poll_source", {"provider": "stripe"}, 1))
+    connection = Connection((job_id, 1), ("poll_source", {"provider": "stripe"}))
 
     claim = JobQueue(connection).claim("worker-1")
 
