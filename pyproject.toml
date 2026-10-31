@@ -1,5 +1,5 @@
 [project]
-name = "driftwatch"
+name = "Driftwatch"
 version = "0.1.0"
 description = "Detect upstream API drift, find the code it breaks, ship a verified patch."
 readme = "readme.md"
@@ -26,6 +26,9 @@ dev = ["pytest>=8.3", "ruff>=0.8"]
 requires = ["uv_build>=0.12.23,<0.13.0"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+module-name = "Driftwatch"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
@@ -43,6 +46,6 @@ select = ["E", "F", "I", "UP", "B"]
 testpaths = ["tests"]
 addopts = "-q"
 python_files = ["Test*.py"]
-# tests/fixtures/sample_repo is scan input, not a test suite: it ships a deliberately
+# tests/fixtures/sampleRepo is scan input, not a test suite: it ships a deliberately
 # unimportable test file so that test-runner detection has something realistic to find.
 norecursedirs = ["tests/fixtures"]

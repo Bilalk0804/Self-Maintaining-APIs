@@ -10,15 +10,15 @@ endpoint-to-code map is derivable rather than hand-curated — held.
 Reproduce with:
 
 ```bash
-./scripts/fetch_fixtures.sh
+./scripts/fetchFixtures.sh
 uv run pytest                     # 71 tests, the gates included as regressions
 uv run driftwatch derive-map --sdk-root .cache/stripe-python --out .cache/surface_map.json \
                              --spec .cache/spec_T2.json
 uv run driftwatch diff-spec  --before .cache/spec_T0.json --after .cache/spec_T2.json \
                              --out .cache/deltas.json
-uv run driftwatch scan       --repo tests/fixtures/sample_repo --changes .cache/deltas.json \
+uv run driftwatch scan       --repo tests/fixtures/sampleRepo --changes .cache/deltas.json \
                              --surface-map .cache/surface_map.json --out .cache/findings.json
-uv run driftwatch fix        --repo tests/fixtures/sample_repo \
+uv run driftwatch fix        --repo tests/fixtures/sampleRepo \
                              --findings .cache/findings.json --out .cache/patch.diff
 ```
 
@@ -174,8 +174,8 @@ repository depending only on Flask is skipped before any file is parsed.
 **Result: +1 / −1 lines, byte-identical elsewhere, valid under `git apply`.**
 
 ```diff
---- a/app/checkout.py
-+++ b/app/checkout.py
+--- a/app/Checkout.py
++++ b/app/Checkout.py
 @@ -8,7 +8,7 @@
  def start_checkout(price_id):
      session = client.checkout.sessions.create(

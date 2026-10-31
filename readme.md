@@ -45,11 +45,11 @@ uv run driftwatch diff-spec --before .cache/spec_T0.json --after .cache/spec_T2.
                             --out .cache/deltas.json
 
 # 3. Find affected code
-uv run driftwatch scan --repo tests/fixtures/sample_repo --changes .cache/deltas.json \
+uv run driftwatch scan --repo tests/fixtures/sampleRepo --changes .cache/deltas.json \
                        --surface-map .cache/surface_map.json --out .cache/findings.json
 
 # 4. Generate a minimal patch
-uv run driftwatch fix --repo tests/fixtures/sample_repo \
+uv run driftwatch fix --repo tests/fixtures/sampleRepo \
                       --findings .cache/findings.json --out .cache/patch.diff
 ```
 

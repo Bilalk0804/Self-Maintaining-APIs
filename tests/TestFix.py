@@ -19,7 +19,7 @@ from Driftwatch.Mapping.Model import SurfaceMap
 from Driftwatch.Match.Engine import scan_repo
 from Driftwatch.Match.Scorer import decide
 from Driftwatch.Tsutil import has_errors, parse
-from tests.deltas import ALL_DELTAS, REAL_RENAME
+from tests.Deltas import ALL_DELTAS, REAL_RENAME
 
 
 def test_apply_edits_replaces_a_single_range() -> None:

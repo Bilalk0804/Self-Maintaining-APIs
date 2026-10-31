@@ -108,7 +108,7 @@ class TestGateA3Matching:
         result = scan_repo(sample_repo, ALL_DELTAS, surface_map)
         hits = [f for f in result.findings if f.change_type == "param_renamed"]
         assert len(hits) == 1
-        assert hits[0].usage.file_path == "app/checkout.py"
+        assert hits[0].usage.file_path == "app/Checkout.py"
         assert hits[0].usage.match_kind == "param_keyword"
 
     def test_finds_both_model_literal_occurrences(

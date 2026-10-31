@@ -93,7 +93,7 @@ byte-splice edits. Apply, reparse, assert zero `ERROR` nodes, emit a unified dif
 ```
 driftwatch derive-map  --sdk stripe-python --out surface_map.json
 driftwatch diff-spec   --provider stripe --from <sha> --to <sha> --out deltas.json
-driftwatch scan        --repo ./tests/fixtures/sample_repo --changes deltas.json
+driftwatch scan        --repo ./tests/fixtures/sampleRepo --changes deltas.json
 driftwatch fix         --finding <id> --out patch.diff
 ```
 
