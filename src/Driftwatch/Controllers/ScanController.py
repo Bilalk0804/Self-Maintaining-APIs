@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Protocol
+from hashlib import sha256
+from pathlib import Path
+from typing import Any, Protocol
 from uuid import UUID
 
+from Driftwatch.Controllers.Auth import AuthenticatedPrincipal
 from Driftwatch.Providers import get_provider
 from Driftwatch.Services.Growth import ImpactSummary
 from Driftwatch.Services.JobQueue import JobQueue
@@ -15,10 +19,8 @@ from Driftwatch.Services.JobQueue import JobQueue
 class ScanRequest:
     """Validated request received from an HTTP or CLI client."""
 
-    account_id: str
     repository_id: str
     provider: str
-    repository_path: str
     commit_sha: str
     trigger: str = "manual"
 
@@ -30,6 +32,64 @@ class ScanResponse:
     job_id: UUID | None
     status: str
     idempotency_key: str
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizedRepository:
+    """Repository identity and workspace resolved after tenant authorization."""
+
+    repository_id: str
+    account_id: str
+    workspace: Path
+
+
+class RepositoryAuthorizer(Protocol):
+    """Resolve repositories only when they belong to the authenticated account."""
+
+    def resolve(
+        self, principal: AuthenticatedPrincipal, repository_id: str
+    ) -> AuthorizedRepository:
+        """Return an authorized repository or raise ``PermissionError``."""
+
+
+class RepositoryConnection(Protocol):
+    """Minimal database surface used by repository authorization."""
+
+    def execute(self, query: str, params: tuple[Any, ...] = ()) -> Any:
+        """Execute a parameterized repository lookup."""
+
+
+class PostgresRepositoryAuthorizer:
+    """Authorize active repositories and derive workspaces from a trusted root."""
+
+    def __init__(self, connection: RepositoryConnection, workspace_root: Path) -> None:
+        self._connection = connection
+        self._workspace_root = workspace_root.resolve()
+
+    def resolve(
+        self, principal: AuthenticatedPrincipal, repository_id: str
+    ) -> AuthorizedRepository:
+        """Resolve a tenant-owned repository without accepting a client path."""
+        try:
+            repository_uuid = UUID(repository_id)
+        except ValueError as error:
+            raise PermissionError("repository is not accessible") from error
+        row = self._connection.execute(
+            """
+                SELECT account_id
+                FROM repo
+                WHERE id = %s AND account_id = %s AND is_active = true
+            """,
+            (repository_uuid, principal.account_id),
+        ).fetchone()
+        if row is None:
+            raise PermissionError("repository is not accessible")
+        workspace = (self._workspace_root / str(repository_uuid)).resolve()
+        try:
+            workspace.relative_to(self._workspace_root)
+        except ValueError as error:
+            raise PermissionError("repository workspace escapes workspace root") from error
+        return AuthorizedRepository(str(repository_uuid), principal.account_id, workspace)
 
 
 class DashboardReader(Protocol):
@@ -46,22 +106,29 @@ class ScanController:
         self,
         queue: JobQueue,
         dashboard: DashboardReader,
+        repositories: RepositoryAuthorizer,
     ) -> None:
         self._queue = queue
         self._dashboard = dashboard
+        self._repositories = repositories
 
-    def submit_scan(self, request: ScanRequest) -> ScanResponse:
+    def submit_scan(
+        self, principal: AuthenticatedPrincipal, request: ScanRequest
+    ) -> ScanResponse:
         """Validate and enqueue a scan without performing pipeline work in the handler."""
         self._validate_request(request)
-        idempotency_key = self._idempotency_key(request)
+        repository = self._repositories.resolve(principal, request.repository_id)
+        if repository.account_id != principal.account_id:
+            raise PermissionError("repository is not owned by the authenticated account")
+        idempotency_key = self._idempotency_key(principal, request)
         job_id = self._queue.enqueue(
             "scan_repository",
             idempotency_key,
             {
-                "account_id": request.account_id,
-                "repository_id": request.repository_id,
+                "account_id": principal.account_id,
+                "repository_id": repository.repository_id,
                 "provider": request.provider,
-                "repository_path": request.repository_path,
+                "repository_path": str(repository.workspace),
                 "commit_sha": request.commit_sha,
                 "trigger": request.trigger,
             },
@@ -73,21 +140,15 @@ class ScanController:
             idempotency_key=idempotency_key,
         )
 
-    def dashboard(self, account_id: str) -> list[ImpactSummary]:
+    def dashboard(self, principal: AuthenticatedPrincipal) -> list[ImpactSummary]:
         """Return dashboard data through the service layer."""
-        if not account_id.strip():
-            raise ValueError("account_id must not be empty")
-        return self._dashboard.upcoming_impact(account_id)
+        return self._dashboard.upcoming_impact(principal.account_id)
 
     @staticmethod
     def _validate_request(request: ScanRequest) -> None:
         """Reject incomplete requests before they reach the queue."""
-        if not request.account_id.strip():
-            raise ValueError("account_id must not be empty")
         if not request.repository_id.strip():
             raise ValueError("repository_id must not be empty")
-        if not request.repository_path.strip():
-            raise ValueError("repository_path must not be empty")
         if not request.commit_sha.strip():
             raise ValueError("commit_sha must not be empty")
         if not request.trigger.strip():
@@ -95,14 +156,18 @@ class ScanController:
         get_provider(request.provider)
 
     @staticmethod
-    def _idempotency_key(request: ScanRequest) -> str:
-        """Build a stable key for one repository revision and provider."""
-        return ":".join(
-            (
-                "scan",
-                request.account_id,
-                request.repository_id,
-                request.provider,
-                request.commit_sha,
-            )
-        )
+    def _idempotency_key(
+        principal: AuthenticatedPrincipal, request: ScanRequest
+    ) -> str:
+        """Hash canonical, server-resolved identity and revision fields."""
+        canonical = json.dumps(
+            {
+                "account_id": principal.account_id,
+                "commit_sha": request.commit_sha,
+                "provider": request.provider,
+                "repository_id": request.repository_id,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode()
+        return f"scan:{sha256(canonical).hexdigest()}"

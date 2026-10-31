@@ -99,16 +99,27 @@ The first HTTP-facing controller is intentionally framework-neutral:
 
 ```python
 class ScanController:
-    def submit_scan(self, request: ScanRequest) -> ScanResponse:
-        """Validate client input and enqueue work; do not run the scan inline."""
+    def submit_scan(
+        self, principal: AuthenticatedPrincipal, request: ScanRequest
+    ) -> ScanResponse:
+        """Authorize the repository and enqueue work; do not run the scan inline."""
 
-    def dashboard(self, account_id: str) -> list[ImpactSummary]:
-        """Delegate dashboard reads to the service layer."""
+    def dashboard(self, principal: AuthenticatedPrincipal) -> list[ImpactSummary]:
+        """Use the verified principal's account; never accept account_id from the client."""
 ```
 
-An eventual FastAPI handler should only deserialize the request, call this controller, and
-map `ScanResponse` or raised validation errors to HTTP status codes. Queue workers, database
-queries, provider polling, matching, and publishing remain outside the handler.
+The authentication dependency must validate Auth0 access tokens with RS256, the exact issuer,
+the exact API audience, expiration, and a rotating JWKS key before constructing
+`AuthenticatedPrincipal`. `account_id` and filesystem paths are not public request fields.
+The repository authorization service resolves `repository_id` to a tenant-owned workspace and
+rejects cross-account access. An eventual FastAPI handler should only deserialize the request,
+invoke the authentication dependency and controller, and map `ScanResponse` or raised
+validation errors to HTTP status codes. Queue workers, database queries, provider polling,
+matching, and publishing remain outside the handler.
+
+The repository authorization service queries `repo` by both repository ID and the
+authenticated account, requires an active record, and derives the checkout workspace beneath
+a server-configured workspace root. Client-supplied filesystem paths are rejected by design.
 
 ### 1.1 Gate decision
 
