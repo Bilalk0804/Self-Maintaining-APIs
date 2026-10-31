@@ -108,6 +108,11 @@ The GitHub publisher uses a stable hidden marker to find existing issues or pull
 before creating anything. Issues are created directly; pull requests create a short-lived
 Driftwatch branch, update the patched file through the Contents API, and open a draft PR.
 
+Dashboard queries use `v_upcoming_impact`; RSS rendering escapes feed content; alerts use
+the database deduplication key and record delivery failures; calibration only changes
+confidence after a minimum observation count; billing metering rejects usage beyond the
+account plan limit.
+
 ## LLM boundary
 
 The `understand` call receives only deterministic deltas, source descriptors, and retrieved

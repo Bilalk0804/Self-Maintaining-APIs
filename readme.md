@@ -93,6 +93,9 @@ docs/
   gateResults.md     spike measurements
 ```
 
+`Services/Growth.py` contains framework-neutral dashboard impact queries, escaped RSS
+rendering, deduplicated alerts, conservative confidence calibration, and plan usage checks.
+
 ## Design decisions worth knowing
 
 - **The Surface Map is derived, not curated.** Provider SDKs are generated from their specs,
