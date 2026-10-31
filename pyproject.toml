@@ -13,6 +13,7 @@ dependencies = [
     "httpx>=0.27",
     "typer>=0.15",
     "orjson>=3.10",
+    "psycopg[binary]>=3.2",
     "rich>=13.9",
 ]
 

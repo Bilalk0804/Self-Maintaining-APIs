@@ -125,14 +125,14 @@ class TestGateA3Matching:
     ) -> None:
         result = scan_repo(sample_repo, ALL_DELTAS, surface_map)
         files = {f.usage.file_path for f in result.findings}
-        assert {"app/payments.py", "app/legacy.py", "app/raw_http.py"} <= files
+        assert {"app/Payments.py", "app/Legacy.py", "app/RawHttp.py"} <= files
 
     def test_resolves_a_response_field_read(
         self, sample_repo: Path, surface_map: SurfaceMap
     ) -> None:
         result = scan_repo(sample_repo, ALL_DELTAS, surface_map)
         hits = [f for f in result.findings if f.usage.match_kind == "response_attribute"]
-        # payments.py reads charge.source on two separate lines; both need editing, so both
+        # Payments.py reads charge.source on two separate lines; both need editing, so both
         # are reported, and they must carry distinct fingerprints.
         assert {f.surface_ref for f in hits} == {"api:stripe/obj:charge/field:source"}
         assert len(hits) == 2
