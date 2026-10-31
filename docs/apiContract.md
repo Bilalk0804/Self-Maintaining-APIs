@@ -82,6 +82,10 @@ class SandboxRunner(Protocol):
     def run(self, repo_root: Path, phase: str, command: list[str],
             allow_network: bool) -> SandboxResult: ...
 
+The sandbox runs each verification command in a disposable repository copy, captures stdout
+and stderr, enforces a timeout, and records the explicit network policy in its result.
+Verification never mutates the caller's checkout.
+
 # --- Act -------------------------------------------------------------------
 
 class Publisher(Protocol):

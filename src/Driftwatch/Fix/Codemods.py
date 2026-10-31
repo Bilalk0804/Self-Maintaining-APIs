@@ -129,12 +129,55 @@ class ReplaceStringLiteral:
         ]
 
 
-def default_registry(replacements: dict[str, str] | None = None) -> list[Codemod]:
+class InsertRequiredKeywordArgument:
+    """Insert a configured required keyword into a Python call."""
+
+    name = "insert_required_keyword_argument"
+    change_types = frozenset({"param_added_required", "param_became_required"})
+
+    def __init__(self, parameters: dict[str, str] | None = None) -> None:
+        """Store ``{surface_ref: "name=value"}`` additions approved by the caller."""
+        self._parameters = parameters or {}
+
+    def plan(self, finding: Finding, src: bytes) -> list[Edit]:
+        """Plan an insertion only when the operation and value are explicitly configured."""
+        if finding.usage.match_kind != "operation_call":
+            return []
+        addition = self._parameters.get(finding.surface_ref)
+        if not addition or "=" not in addition:
+            return []
+        node = _node_at(src, finding.usage.start_byte, finding.usage.end_byte, "call")
+        if node is None:
+            return []
+        args = node.child_by_field_name("arguments")
+        parameter_name = addition.split("=", 1)[0]
+        if args is None or any(
+            tsutil.text(child, src).startswith(parameter_name) for child in args.named_children
+        ):
+            return []
+        insertion = addition.encode("utf-8")
+        if args.named_children:
+            insertion = b", " + insertion
+        return [
+            Edit(
+                start_byte=args.end_byte - 1,
+                end_byte=args.end_byte - 1,
+                replacement=insertion,
+                rationale=f"insert required argument {addition}",
+            )
+        ]
+
+
+def default_registry(
+    replacements: dict[str, str] | None = None,
+    required_parameters: dict[str, str] | None = None,
+) -> list[Codemod]:
     """Return the built-in codemods, highest precision first."""
     return [
         RenameKeywordArgument(),
         RenameDictKey(),
         ReplaceStringLiteral(replacements or {}),
+        InsertRequiredKeywordArgument(required_parameters),
     ]
 
 

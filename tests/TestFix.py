@@ -17,7 +17,8 @@ from Driftwatch.Fix.Splice import (
 )
 from Driftwatch.Mapping.Model import SurfaceMap
 from Driftwatch.Match.Engine import scan_repo
-from Driftwatch.Match.Scorer import decide
+from Driftwatch.Match.Resolver import Usage
+from Driftwatch.Match.Scorer import Finding, decide
 from Driftwatch.Tsutil import has_errors, parse
 from tests.Deltas import ALL_DELTAS, REAL_RENAME
 
@@ -52,6 +53,40 @@ def test_verify_patch_rejects_broken_syntax() -> None:
 def test_diff_stats_counts_changed_lines_only() -> None:
     diff = unified_diff(b"a\nb\nc\n", b"a\nB\nc\n", "f.py")
     assert diff_stats(diff) == (1, 1)
+
+
+def test_insert_required_keyword_argument_is_explicitly_configured() -> None:
+    source = b"client.create(amount=10)"
+    usage = Usage(
+        surface_ref="api:stripe/op:post_v1_charges",
+        match_kind="operation_call",
+        file_path="payments.py",
+        start_line=1,
+        end_line=1,
+        start_byte=0,
+        end_byte=len(source),
+        symbol_ref="stripe.Charges.create",
+        snippet=source.decode(),
+        resolution_confidence=0.95,
+    )
+    finding = Finding(
+        change_fingerprint="change",
+        change_type="param_added_required",
+        severity="breaking",
+        surface_ref=usage.surface_ref,
+        usage=usage,
+        confidence=0.9,
+    )
+    name, edits = codemods_mod.plan_edits(
+        finding,
+        source,
+        codemods_mod.default_registry(
+            required_parameters={usage.surface_ref: "source=token"}
+        ),
+    )
+
+    assert name == "insert_required_keyword_argument"
+    assert apply_edits(source, edits) == b"client.create(amount=10, source=token)"
 
 
 class TestGateA4ByteSplicePatches:

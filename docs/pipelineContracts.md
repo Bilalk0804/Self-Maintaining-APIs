@@ -100,7 +100,9 @@ class Publisher(Protocol):
 ```
 
 Codemods return byte-range edits and never reformat a file. The sandbox verifies syntax,
-types, lint, and tests. The publisher is idempotent on `(repo_id, change_id, artifact_kind)`.
+types, lint, and tests in a disposable checkout. It captures command output, enforces a
+timeout, and records whether the command was allowed network access. The publisher is
+idempotent on `(repo_id, change_id, artifact_kind)`.
 
 ## LLM boundary
 
