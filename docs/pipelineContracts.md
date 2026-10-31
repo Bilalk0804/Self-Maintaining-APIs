@@ -32,7 +32,7 @@ class IndexDiffer(Protocol):
     def diff(self, before: SurfaceIndex, after: SurfaceIndex) -> list[RawDelta]: ...
 
 class EvidenceRetriever(Protocol):
-    def retrieve(self, delta: RawDelta, window_days: int = 30) -> list[Evidence]: ...
+    def retrieve(self, delta: RawDelta) -> list[Evidence]: ...
 
 class ChangeClassifier(Protocol):
     def classify(
@@ -42,6 +42,11 @@ class ChangeClassifier(Protocol):
 
 Detection and interpretation are separate: the differ is deterministic, and the LLM only
 classifies already-detected deltas. A record without valid evidence is quarantined.
+
+The evidence retriever always emits the deterministic delta as `raw_delta` evidence and may
+add verbatim line-window quotes from configured provider sources. Provider quotes retain
+their source URL and locator; empty quotes, missing source URLs, oversized responses, and
+HTTP failures are rejected rather than silently converted into successful evidence.
 
 ## Change record to finding
 

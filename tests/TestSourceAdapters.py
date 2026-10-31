@@ -4,6 +4,10 @@ from hashlib import sha256
 
 import httpx
 
+from Driftwatch.Providers import ProviderSource
+from Driftwatch.Surfaces import SurfaceDescriptor
+from Driftwatch.Watch.Differ import Delta
+from Driftwatch.Watch.Evidence import HttpEvidenceRetriever
 from Driftwatch.Watch.SourceAdapters import HttpSourceAdapter, SourceState
 
 
@@ -36,3 +40,32 @@ def test_poll_suppresses_identical_content_without_http_validator() -> None:
 
     assert result.changed is False
     assert result.payload is None
+
+
+def test_evidence_retriever_returns_verbatim_provider_quote() -> None:
+    source = ProviderSource("changelog_html", "https://example.test/changelog", False)
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                text="Intro\nPOST /v1/charges requires source\nFooter",
+            )
+        )
+    )
+    delta = Delta(
+        surface_ref="api:stripe/op:post_v1_charges",
+        change_type="param_added_required",
+        severity="breaking",
+        op="modified",
+        before=SurfaceDescriptor(kind="op", type_sig="POST /v1/charges"),
+        after=None,
+        detail="source is now required",
+    )
+
+    evidence = HttpEvidenceRetriever((source,), client=client).retrieve(delta)
+
+    assert evidence[0].kind == "raw_delta"
+    provider_evidence = evidence[1]
+    assert provider_evidence.quote == "Intro\nPOST /v1/charges requires source\nFooter"
+    assert provider_evidence.source_url == source.url
+    assert provider_evidence.locator == "line 2"

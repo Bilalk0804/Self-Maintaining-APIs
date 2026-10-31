@@ -48,7 +48,7 @@ with a Stripe `order`.
 | `ProviderSource` | provider registry | poller | `kind`, URL, and ground-truth flag are explicit |
 | `SurfaceDescriptor` | source indexer | differ | only caller-visible shape is compared |
 | `RawDelta` | differ | evidence/classifier | deterministic fingerprint; no LLM fields |
-| `Evidence` | retriever | classifier/publisher | quote is copied from upstream input |
+| `Evidence` | retriever | classifier/publisher | non-empty verbatim quote, source URL for provider evidence |
 | `ChangeRecord` | classifier | matcher/API | at least one valid surface and evidence item |
 | `MigrationRecipe` | classifier/human | codemod | closed kind plus JSON parameters |
 | `SurfaceMapEntry` | SDK adapter | resolver | provenance and confidence are recorded |
@@ -58,6 +58,11 @@ with a Stripe `order`.
 | `PublishedArtifact` | publisher | dashboard/API | idempotent `(repo, change, kind)` key |
 
 ## PayPal provider contract
+
+Evidence records contain a deterministic `raw_delta` quote plus zero or more
+`provider_source` quotes. Provider quotes are bounded line windows copied from the fetched
+source, with the source URL and line locator retained for review. Retrieval failures and
+oversized responses fail explicitly; they are not represented as empty evidence.
 
 The hackathon integration uses the official:
 
