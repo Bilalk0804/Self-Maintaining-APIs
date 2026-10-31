@@ -77,7 +77,8 @@ src/Driftwatch/
   Tsutil.py          tree-sitter helpers
   Watch/             OpenapiIndexer.py, Differ.py (set-diff + classify)
   Mapping/           SdkPython.py — derive endpoint <-> symbol bindings from SDK source
-  Match/             Prefilter.py, Candidates.py, Resolver.py, Scorer.py, Engine.py
+  Match/             Prefilter.py, Candidates.py, Resolver.py, TypescriptResolver.py,
+                     Scorer.py, Engine.py
   Fix/               Splice.py (byte-range edits), Codemods.py
   Cli.py
   Services/          application use cases, independent of presentation

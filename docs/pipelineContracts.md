@@ -74,6 +74,10 @@ class ConfidenceScorer(Protocol):
     ) -> ScoredFinding: ...
 ```
 
+Python files use the Python tree-sitter resolver. TypeScript, TSX, JavaScript, JSX, and MJS
+files use the TypeScript resolver, which resolves mapped member-expression calls and known
+request-object keys without treating similarly named in-house objects as provider usage.
+
 For PayPal, dependency prefiltering recognises `paypal-server-sdk` and the
 `paypalserversdk` import namespace. Raw HTTP matching also recognises PayPal API hosts and
 paths, so repositories that do not use the SDK are not silently excluded.

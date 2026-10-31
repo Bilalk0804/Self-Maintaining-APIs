@@ -10,6 +10,7 @@ from Driftwatch.Match import Candidates as candidates
 from Driftwatch.Match import Prefilter as prefilter
 from Driftwatch.Match.Resolver import resolve_file
 from Driftwatch.Match.Scorer import Finding, score
+from Driftwatch.Match.TypescriptResolver import resolve_file as resolve_typescript_file
 from Driftwatch.Surfaces import SurfaceRef
 from Driftwatch.Watch.Differ import Delta
 
@@ -82,7 +83,12 @@ def scan_repo(repo_root: Path, deltas: list[Delta], smap: SurfaceMap) -> ScanRes
             continue
         result.files_parsed += 1
         rel = path.relative_to(repo_root).as_posix()
-        for usage in resolve_file(src, rel, smap, literal_probes=literal_map):
+        resolver = resolve_file if path.suffix == ".py" else resolve_typescript_file
+        if path.suffix == ".py":
+            usages = resolver(src, rel, smap, literal_probes=literal_map)
+        else:
+            usages = resolver(src, rel, smap)
+        for usage in usages:
             for delta in _relevant_deltas(usage.surface_ref, deltas_by_surface):
                 finding = score(usage, delta, surface_map_confidence=0.95)
                 if finding is None or finding.fingerprint in seen:
