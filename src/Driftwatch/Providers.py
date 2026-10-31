@@ -52,7 +52,76 @@ PAYPAL = Provider(
     ),
 )
 
-PROVIDERS: dict[str, Provider] = {"paypal": PAYPAL}
+STRIPE = Provider(
+    slug="stripe",
+    display_name="Stripe",
+    sdk_package="stripe",
+    sdk_repository="https://github.com/stripe/stripe-python",
+    sources=(
+        ProviderSource(
+            kind="openapi",
+            url="https://github.com/stripe/openapi",
+            ground_truth=True,
+        ),
+        ProviderSource(
+            kind="sdk_source",
+            url="https://github.com/stripe/stripe-python",
+            ground_truth=True,
+        ),
+        ProviderSource(
+            kind="changelog_html",
+            url="https://docs.stripe.com/changelog",
+            ground_truth=False,
+        ),
+    ),
+)
+
+OPENAI = Provider(
+    slug="openai",
+    display_name="OpenAI",
+    sdk_package="openai",
+    sdk_repository="https://github.com/openai/openai-python",
+    sources=(
+        ProviderSource(
+            kind="openapi",
+            url="https://github.com/openai/openai-openapi",
+            ground_truth=True,
+        ),
+        ProviderSource(
+            kind="sdk_source",
+            url="https://github.com/openai/openai-python",
+            ground_truth=True,
+        ),
+        ProviderSource(
+            kind="changelog_html",
+            url="https://platform.openai.com/docs/changelog",
+            ground_truth=False,
+        ),
+    ),
+)
+
+RAZORPAY = Provider(
+    slug="razorpay",
+    display_name="Razorpay",
+    sdk_package="razorpay",
+    sdk_repository="https://github.com/razorpay/razorpay-python",
+    sources=(
+        ProviderSource(
+            kind="sdk_source",
+            url="https://github.com/razorpay/razorpay-python",
+            ground_truth=True,
+        ),
+        ProviderSource(
+            kind="changelog_html",
+            url="https://razorpay.com/docs/api/",
+            ground_truth=False,
+        ),
+    ),
+)
+
+PROVIDERS: dict[str, Provider] = {
+    provider.slug: provider for provider in (PAYPAL, STRIPE, OPENAI, RAZORPAY)
+}
 
 
 def get_provider(slug: str) -> Provider:
