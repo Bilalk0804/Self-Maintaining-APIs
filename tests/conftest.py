@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from driftwatch.mapping.model import SurfaceMap
-from driftwatch.mapping.sdk_python import derive_stripe_python
+from Driftwatch.Mapping.Model import SurfaceMap
+from Driftwatch.Mapping.SdkPython import derive_stripe_python
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CACHE = REPO_ROOT / ".cache"
-SAMPLE_REPO = REPO_ROOT / "tests" / "fixtures" / "sample_repo"
+SAMPLE_REPO = REPO_ROOT / "tests" / "fixtures" / "sampleRepo"
 
 
 @pytest.fixture(scope="session")
@@ -23,7 +23,7 @@ def stripe_sdk_root() -> Path:
     """Path to a stripe-python checkout, or skip."""
     path = CACHE / "stripe-python"
     if not (path / "stripe").is_dir():
-        pytest.skip("stripe-python not cached; run scripts/fetch_fixtures.sh")
+        pytest.skip("stripe-python not cached; run scripts/fetchFixtures.sh")
     return path
 
 
@@ -38,7 +38,7 @@ def spec_paths() -> tuple[Path, Path]:
     """Two cached OpenAPI revisions, or skip."""
     before, after = CACHE / "spec_T0.json", CACHE / "spec_T2.json"
     if not before.is_file() or not after.is_file():
-        pytest.skip("spec revisions not cached; run scripts/fetch_fixtures.sh")
+        pytest.skip("spec revisions not cached; run scripts/fetchFixtures.sh")
     return before, after
 
 

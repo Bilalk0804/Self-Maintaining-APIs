@@ -2,7 +2,7 @@
 name = "driftwatch"
 version = "0.1.0"
 description = "Detect upstream API drift, find the code it breaks, ship a verified patch."
-readme = "README.md"
+readme = "readme.md"
 authors = [{ name = "Bilal", email = "khanbilal080804@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-driftwatch = "driftwatch.cli:app"
+driftwatch = "Driftwatch.Cli:app"
 
 [dependency-groups]
 dev = ["pytest>=8.3", "ruff>=0.8"]
@@ -35,13 +35,14 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 # typer.Option() in a default is the framework's intended idiom, not a mutable default.
-"src/driftwatch/cli.py" = ["B008"]
+"src/Driftwatch/Cli.py" = ["B008"]
 # Long lines in these modules are tree-sitter query strings, which cannot be wrapped.
-"src/driftwatch/mapping/sdk_python.py" = ["E501"]
+"src/Driftwatch/Mapping/SdkPython.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+python_files = ["Test*.py"]
 # tests/fixtures/sample_repo is scan input, not a test suite: it ships a deliberately
 # unimportable test file so that test-runner detection has something realistic to find.
 norecursedirs = ["tests/fixtures"]
