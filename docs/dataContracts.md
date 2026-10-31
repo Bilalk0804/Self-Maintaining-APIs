@@ -49,7 +49,7 @@ with a Stripe `order`.
 | `SurfaceDescriptor` | source indexer | differ | only caller-visible shape is compared |
 | `RawDelta` | differ | evidence/classifier | deterministic fingerprint; no LLM fields |
 | `Evidence` | retriever | classifier/publisher | non-empty verbatim quote, source URL for provider evidence |
-| `ChangeRecord` | classifier | matcher/API | at least one valid surface and evidence item |
+| `ChangeRecord` | classifier | matcher/API | deterministic type/severity, valid surface, and grounded evidence |
 | `MigrationRecipe` | classifier/human | codemod | closed kind plus JSON parameters |
 | `SurfaceMapEntry` | SDK adapter | resolver | provenance and confidence are recorded |
 | `Finding` | matcher | fix/gate | repository location, surface, score, and fingerprint |
@@ -63,6 +63,11 @@ Evidence records contain a deterministic `raw_delta` quote plus zero or more
 `provider_source` quotes. Provider quotes are bounded line windows copied from the fetched
 source, with the source URL and line locator retained for review. Retrieval failures and
 oversized responses fail explicitly; they are not represented as empty evidence.
+
+The classifier returns a Pydantic-validated `ChangeRecordOut`. It quarantines output when a
+quote is not contained in the cited evidence, a surface is not part of the detected delta,
+or the model attempts to change the deterministic change type or severity. Expired or
+implausibly distant deadlines are removed rather than trusted.
 
 The hackathon integration uses the official:
 
