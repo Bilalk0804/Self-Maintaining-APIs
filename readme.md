@@ -1,5 +1,7 @@
 # Driftwatch
 
+[![CI](https://github.com/Bilalk0804/Self-Maintaining-APIs/actions/workflows/ci.yml/badge.svg)](https://github.com/Bilalk0804/Self-Maintaining-APIs/actions/workflows/ci.yml)
+
 > Working name. "Dependabot for API changes": detect upstream API drift, find the code it
 > breaks, and ship a verified patch.
 

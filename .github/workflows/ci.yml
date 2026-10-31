@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Python, PostgreSQL, and package
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: driftwatch
+          POSTGRES_PASSWORD: driftwatch
+          POSTGRES_DB: driftwatch_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U driftwatch -d driftwatch_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install locked dependencies
+        run: uv sync --locked --all-groups
+
+      - name: Check formatting and lint
+        run: uv run ruff check src/Driftwatch tests
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Apply PostgreSQL migration
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: driftwatch
+          PGPASSWORD: driftwatch
+          PGDATABASE: driftwatch_ci
+        run: psql --set ON_ERROR_STOP=1 --file migrations/001JobQueue.sql
+
+      - name: Verify PostgreSQL migration
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: driftwatch
+          PGPASSWORD: driftwatch
+          PGDATABASE: driftwatch_ci
+        run: |
+          test "$(psql --tuples-only --no-align --command "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('job', 'job_run');")" = "2"
+          psql --command "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'job' ORDER BY indexname;"
+
+      - name: Build package
+        run: uv build
