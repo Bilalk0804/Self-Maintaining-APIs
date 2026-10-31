@@ -6,6 +6,10 @@
 Status: design for review. No code written yet. Source facts in Appendix A were verified
 live on 2026-10-10; everything else is design intent.
 
+Deferred production integrations and their fillable interfaces are tracked in
+[productionContracts.md](./productionContracts.md). The initial deployment target is fake
+GCP/gcloud for local development and CI; real cloud services are opt-in.
+
 ---
 
 ## 1. Problem, framed precisely
