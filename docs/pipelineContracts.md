@@ -104,6 +104,10 @@ types, lint, and tests in a disposable checkout. It captures command output, enf
 timeout, and records whether the command was allowed network access. The publisher is
 idempotent on `(repo_id, change_id, artifact_kind)`.
 
+The GitHub publisher uses a stable hidden marker to find existing issues or pull requests
+before creating anything. Issues are created directly; pull requests create a short-lived
+Driftwatch branch, update the patched file through the Contents API, and open a draft PR.
+
 ## LLM boundary
 
 The `understand` call receives only deterministic deltas, source descriptors, and retrieved

@@ -55,7 +55,7 @@ with a Stripe `order`.
 | `Finding` | matcher | fix/gate | repository location, surface, score, and fingerprint |
 | `Patch` | codemod/LLM fallback | verifier/publisher | bounded edits and diff hash |
 | `VerificationResult` | sandbox | gate | phase, command, exit status, and network policy |
-| `PublishedArtifact` | publisher | dashboard/API | idempotent `(repo, change, kind)` key |
+| `PublishedArtifact` | publisher | dashboard/API | idempotent `(repo, change, kind)` key and GitHub URL |
 
 ## PayPal provider contract
 
