@@ -93,6 +93,23 @@ class Publisher(Protocol):
         """Idempotent on (repo_id, change_id, kind): updates, never duplicates."""
 ```
 
+### Controller draft
+
+The first HTTP-facing controller is intentionally framework-neutral:
+
+```python
+class ScanController:
+    def submit_scan(self, request: ScanRequest) -> ScanResponse:
+        """Validate client input and enqueue work; do not run the scan inline."""
+
+    def dashboard(self, account_id: str) -> list[ImpactSummary]:
+        """Delegate dashboard reads to the service layer."""
+```
+
+An eventual FastAPI handler should only deserialize the request, call this controller, and
+map `ScanResponse` or raised validation errors to HTTP status codes. Queue workers, database
+queries, provider polling, matching, and publishing remain outside the handler.
+
 ### 1.1 Gate decision
 
 The single function that decides what we are allowed to do. Pure, table-driven, and

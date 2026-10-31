@@ -47,6 +47,7 @@ select = ["E", "F", "I", "UP", "B"]
 testpaths = ["tests"]
 addopts = "-q"
 python_files = ["Test*.py"]
+markers = ["integration: tests requiring a real PostgreSQL service"]
 # tests/fixtures/sampleRepo is scan input, not a test suite: it ships a deliberately
 # unimportable test file so that test-runner detection has something realistic to find.
 norecursedirs = ["tests/fixtures"]

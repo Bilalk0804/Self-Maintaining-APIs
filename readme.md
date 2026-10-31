@@ -96,6 +96,11 @@ docs/
 `Services/Growth.py` contains framework-neutral dashboard impact queries, escaped RSS
 rendering, deduplicated alerts, conservative confidence calibration, and plan usage checks.
 
+The test suite is split into isolated unit tests under `tests/unit/` and PostgreSQL/service
+boundary tests under `tests/integration/`. Run them independently with
+`uv run pytest tests/unit` and `DRIFTWATCH_TEST_DATABASE_URL="..." uv run pytest
+tests/integration`.
+
 ## Design decisions worth knowing
 
 - **The Surface Map is derived, not curated.** Provider SDKs are generated from their specs,
