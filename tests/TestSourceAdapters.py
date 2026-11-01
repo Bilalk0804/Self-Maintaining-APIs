@@ -69,3 +69,27 @@ def test_evidence_retriever_returns_verbatim_provider_quote() -> None:
     assert provider_evidence.quote == "Intro\nPOST /v1/charges requires source\nFooter"
     assert provider_evidence.source_url == source.url
     assert provider_evidence.locator == "line 2"
+
+
+def test_validate_egress_url_rejects_non_https_and_loopback() -> None:
+    import pytest
+
+    from Driftwatch.Watch.SourceAdapters import validate_egress_url
+
+    with pytest.raises(ValueError, match="only HTTPS"):
+        validate_egress_url("http://example.com/spec.json")
+
+    with pytest.raises(ValueError, match="blocked non-public IP"):
+        validate_egress_url("https://127.0.0.1/spec.json")
+
+
+def test_poll_rejects_oversized_stream() -> None:
+    import pytest
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b"x" * 200))
+    )
+    adapter = HttpSourceAdapter("https://example.test/spec.json", client=client, max_bytes=100)
+
+    with pytest.raises(ValueError, match="exceeds 100 bytes"):
+        adapter.poll(SourceState())

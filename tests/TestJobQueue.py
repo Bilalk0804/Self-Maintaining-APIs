@@ -48,3 +48,15 @@ def test_claim_uses_skip_locked() -> None:
     assert claim.id == job_id
     assert claim.payload == {"provider": "stripe"}
     assert "FOR UPDATE SKIP LOCKED" in connection.queries[0]
+
+
+def test_fail_updates_job_state_and_records_job_run_using_job_id() -> None:
+    job_id = UUID("00000000-0000-0000-0000-000000000001")
+    connection = Connection(None)
+
+    JobQueue(connection).fail(job_id, "boom")
+
+    assert len(connection.queries) == 1
+    assert "RETURNING job_id, attempts" in connection.queries[0]
+    assert "u.job_id" in connection.queries[0]
+    assert connection.commits == 1

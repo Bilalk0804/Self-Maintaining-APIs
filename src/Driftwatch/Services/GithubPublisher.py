@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import base64
+import re
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Literal
 from urllib.parse import quote
 
 import httpx
 
 ArtifactKind = Literal["issue", "pull_request"]
+
+_REPO_SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_FINGERPRINT_RE = re.compile(r"^[A-Za-z0-9_-]{4,64}$")
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9_./-]+$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +43,29 @@ class PublishedArtifact:
     created: bool
 
 
+def _validate_publish_request(request: PublishRequest) -> None:
+    """Validate repository slug, fingerprint, branch, and file path against injection/traversal."""
+    if not _REPO_SLUG_RE.fullmatch(request.repository) or ".." in request.repository.split("/"):
+        raise ValueError(f"invalid GitHub repository slug: {request.repository!r}")
+    if not _FINGERPRINT_RE.fullmatch(request.change_fingerprint):
+        raise ValueError(f"invalid change_fingerprint: {request.change_fingerprint!r}")
+    if (
+        not _BRANCH_RE.fullmatch(request.base_branch)
+        or ".." in request.base_branch
+        or request.base_branch.startswith(("/", "-"))
+    ):
+        raise ValueError(f"invalid base_branch: {request.base_branch!r}")
+    if request.file_path is not None:
+        pure = PurePosixPath(request.file_path)
+        if (
+            pure.is_absolute()
+            or ".." in pure.parts
+            or not pure.parts
+            or pure.parts[0] in {".git", ".github"}
+        ):
+            raise ValueError(f"disallowed or unsafe file_path: {request.file_path!r}")
+
+
 class GithubPublisher:
     """Publish issues and draft pull requests through the GitHub REST API."""
 
@@ -49,7 +78,11 @@ class GithubPublisher:
     ) -> None:
         if not token.strip():
             raise ValueError("GitHub token must not be empty")
-        self._client = client or httpx.Client(timeout=30.0)
+        if not api_base.startswith("https://"):
+            raise ValueError("GitHub api_base must use HTTPS")
+        self._client = client or httpx.Client(
+            timeout=30.0, follow_redirects=False, trust_env=False
+        )
         self._owns_client = client is None
         self._api_base = api_base.rstrip("/")
         self._headers = {
@@ -60,6 +93,7 @@ class GithubPublisher:
 
     def publish(self, request: PublishRequest) -> PublishedArtifact:
         """Create or reuse an issue or draft pull request."""
+        _validate_publish_request(request)
         marker = self._marker(request)
         if request.kind == "issue":
             return self._publish_issue(request, marker)

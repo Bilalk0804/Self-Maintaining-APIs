@@ -85,3 +85,24 @@ def test_draft_pull_request_publishes_one_file() -> None:
     assert result.number == 8
     assert result.created is True
     assert ("POST", "/repos/acme/app/pulls") in calls
+
+
+def test_publisher_rejects_unsafe_paths_and_non_https_base() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="HTTPS"):
+        GithubPublisher("test-token", api_base="http://github.test")
+
+    publisher = GithubPublisher("test-token", api_base="https://github.test")
+    with pytest.raises(ValueError, match="file_path"):
+        publisher.publish(
+            PublishRequest(
+                repository="acme/app",
+                change_fingerprint="deadbeef",
+                kind="pull_request",
+                title="Patch",
+                body="Body",
+                file_path=".github/workflows/ci.yml",
+                patched_content=b"malicious",
+            )
+        )

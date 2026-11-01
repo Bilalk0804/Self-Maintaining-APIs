@@ -20,11 +20,17 @@ _HTTP_METHODS = frozenset({"get", "put", "post", "delete", "patch", "head", "opt
 
 #: Guards against cyclic ``$ref`` chains, which real specs do contain.
 _MAX_REF_DEPTH = 24
+_MAX_SPEC_BYTES = 15 * 1024 * 1024  # 15 MB
 
 
-def load_openapi(raw: bytes) -> dict[str, Any]:
-    """Parse an OpenAPI JSON document."""
-    return orjson.loads(raw)
+def load_openapi(raw: bytes, *, max_bytes: int = _MAX_SPEC_BYTES) -> dict[str, Any]:
+    """Parse an OpenAPI JSON document with a strict byte ceiling."""
+    if len(raw) > max_bytes:
+        raise ValueError(f"OpenAPI document exceeds maximum size of {max_bytes} bytes")
+    data = orjson.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError("OpenAPI root must be a JSON object")
+    return data
 
 
 def build_index(doc: dict[str, Any], provider: str, revision: str) -> SurfaceIndex:
@@ -248,10 +254,12 @@ class _Resolver:
         ref = node.get("$ref")
         if not isinstance(ref, str):
             return node
+        if not ref.startswith("#/"):
+            return {}
         if ref in self._ref_cache:
             return self._ref_cache[ref]
         target: Any = self._doc
-        for part in ref.removeprefix("#/").split("/"):
+        for part in ref[2:].split("/"):
             if not isinstance(target, dict):
                 return {}
             target = target.get(part.replace("~1", "/").replace("~0", "~"))
@@ -297,19 +305,22 @@ class _Resolver:
         return merged
 
 
-def _type_sig(schema: dict[str, Any]) -> str | None:
+def _type_sig(schema: dict[str, Any], depth: int = 0) -> str | None:
     """Build an order-stable type signature.
 
     ``oneOf``/``anyOf`` members are sorted so that a regenerated spec listing the same union
     in a different order produces an identical signature.
     """
-    if not schema:
+    if not schema or depth > _MAX_REF_DEPTH:
         return None
     for union_key in ("oneOf", "anyOf"):
         members = schema.get(union_key)
         if isinstance(members, list) and members:
             parts = sorted(
-                filter(None, (_type_sig(m) if isinstance(m, dict) else None for m in members))
+                filter(
+                    None,
+                    (_type_sig(m, depth + 1) if isinstance(m, dict) else None for m in members),
+                )
             )
             return f"{union_key}[{','.join(parts)}]"
     type_name = schema.get("type")
@@ -317,7 +328,7 @@ def _type_sig(schema: dict[str, Any]) -> str | None:
         type_name = "|".join(sorted(str(t) for t in type_name))
     if type_name == "array":
         items = schema.get("items")
-        inner = _type_sig(items) if isinstance(items, dict) else None
+        inner = _type_sig(items, depth + 1) if isinstance(items, dict) else None
         return f"array[{inner or 'any'}]"
     fmt = schema.get("format")
     if type_name and fmt:

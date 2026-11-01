@@ -158,12 +158,17 @@ class SurfaceDescriptor:
         )
 
 
-def _freeze(value: Any) -> Any:
+_MAX_FREEZE_DEPTH = 32
+
+
+def _freeze(value: Any, depth: int = 0) -> Any:
     """Recursively convert JSON-ish values into hashable, order-stable equivalents."""
+    if depth > _MAX_FREEZE_DEPTH:
+        return repr(value)
     if isinstance(value, dict):
-        return tuple(sorted((k, _freeze(v)) for k, v in value.items()))
+        return tuple(sorted((str(k), _freeze(v, depth + 1)) for k, v in value.items()))
     if isinstance(value, list | tuple):
-        return tuple(_freeze(v) for v in value)
+        return tuple(_freeze(v, depth + 1) for v in value)
     return value
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import replace
 
 from Driftwatch import Tsutil as tsutil
@@ -139,7 +140,11 @@ def _number_occurrences(usages: list[Usage]) -> list[Usage]:
 
 
 def _walk(node: object):
-    """Yield a tree-sitter node and all descendants."""
-    yield node
-    for child in node.named_children:  # type: ignore[attr-defined]
-        yield from _walk(child)
+    """Yield a tree-sitter node and all descendants iteratively."""
+    stack = deque([node])
+    while stack:
+        current = stack.pop()
+        yield current
+        children = getattr(current, "named_children", ())
+        for child in reversed(children):
+            stack.append(child)

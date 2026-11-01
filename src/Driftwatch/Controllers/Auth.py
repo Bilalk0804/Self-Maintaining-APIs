@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -32,11 +33,23 @@ class JwksClient(Protocol):
 class Auth0JwksClient:
     """Small adapter around PyJWT's rotating JWKS client."""
 
-    def __init__(self, issuer: str) -> None:
-        self._client = jwt.PyJWKClient(f"{issuer.rstrip('/')}/.well-known/jwks.json")
+    def __init__(self, issuer: str, *, timeout: int = 5) -> None:
+        self._client = jwt.PyJWKClient(
+            f"{issuer.rstrip('/')}/.well-known/jwks.json",
+            cache_keys=True,
+            max_cached_keys=16,
+            timeout=timeout,
+        )
 
     def get_signing_key(self, token: str) -> Any:
         return self._client.get_signing_key_from_jwt(token).key
+
+
+def verify_shared_secret(expected: str, provided: str) -> bool:
+    """Constant-time secret comparison that rejects empty secrets."""
+    if not expected or not expected.strip() or not provided or not provided.strip():
+        return False
+    return hmac.compare_digest(expected.encode("utf-8"), provided.encode("utf-8"))
 
 
 class Auth0TokenValidator:
@@ -78,7 +91,7 @@ class Auth0TokenValidator:
             )
         except AuthenticationError:
             raise
-        except (jwt.PyJWTError, httpx.HTTPError, KeyError) as error:
+        except (jwt.PyJWTError, httpx.HTTPError, KeyError, OSError) as error:
             raise AuthenticationError("invalid access token") from error
 
         subject = _required_string(claims, "sub")

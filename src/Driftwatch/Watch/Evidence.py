@@ -11,6 +11,7 @@ import httpx
 from Driftwatch.Providers import ProviderSource
 from Driftwatch.Surfaces import SurfaceRef
 from Driftwatch.Watch.Differ import Delta
+from Driftwatch.Watch.SourceAdapters import validate_egress_url
 
 EvidenceKind = Literal["raw_delta", "provider_source"]
 
@@ -57,7 +58,11 @@ class HttpEvidenceRetriever:
         if max_quotes_per_source <= 0:
             raise ValueError("max_quotes_per_source must be positive")
         self._sources = sources
-        self._client = client or httpx.Client(timeout=30.0)
+        self._client = client or httpx.Client(
+            timeout=30.0,
+            follow_redirects=False,
+            trust_env=False,
+        )
         self._owns_client = client is None
         self._max_bytes = max_bytes
         self._max_quotes_per_source = max_quotes_per_source
@@ -78,14 +83,21 @@ class HttpEvidenceRetriever:
             if probe.strip()
         ]
         for source in self._sources:
-            response = self._client.get(source.url)
-            response.raise_for_status()
-            body = response.content
-            if len(body) > self._max_bytes:
-                raise ValueError(
-                    f"evidence source exceeds {self._max_bytes} bytes: {source.url}"
-                )
-            text = body.decode(response.encoding or "utf-8", errors="replace")
+            validate_egress_url(source.url)
+            with self._client.stream("GET", source.url, follow_redirects=False) as response:
+                response.raise_for_status()
+                chunks: list[bytes] = []
+                total = 0
+                for chunk in response.iter_bytes(chunk_size=65_536):
+                    total += len(chunk)
+                    if total > self._max_bytes:
+                        raise ValueError(
+                            f"evidence source exceeds {self._max_bytes} bytes: {source.url}"
+                        )
+                    chunks.append(chunk)
+                body = b"".join(chunks)
+                encoding = response.encoding or "utf-8"
+            text = body.decode(encoding, errors="replace")
             evidence.extend(self._source_matches(source, text, probes, delta))
         return evidence
 

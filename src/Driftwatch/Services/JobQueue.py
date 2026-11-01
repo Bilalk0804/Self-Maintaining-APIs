@@ -124,22 +124,29 @@ class JobQueue:
 
     def fail(self, job_id: UUID, error: str, *, retry_after: datetime | None = None) -> None:
         """Retry a failed job until its configured attempt limit is exhausted."""
+        sanitized_error = error[:2000]
         query = """
-            UPDATE job_state
-            SET status = CASE WHEN attempts >= max_attempts THEN 'dead' ELSE 'pending' END,
-                run_after = COALESCE(%s, now()),
-                locked_by = NULL, locked_at = NULL
-            WHERE job_id = %s AND status = 'running'
+            WITH updated AS (
+                UPDATE job_state
+                SET status = CASE WHEN attempts >= max_attempts THEN 'dead' ELSE 'pending' END,
+                    run_after = COALESCE(%s, now()),
+                    locked_by = NULL,
+                    locked_at = NULL
+                WHERE job_id = %s AND status = 'running'
+                RETURNING job_id, attempts
+            )
+            INSERT INTO job_run (job_id, attempt_no, worker_id, exit_status, error, finished_at)
+            SELECT
+                u.job_id,
+                u.attempts,
+                COALESCE(js.locked_by, 'unknown'),
+                'failed',
+                %s,
+                now()
+            FROM updated u
+            JOIN job_state js ON js.job_id = u.job_id
         """
-        self._connection.execute(query, (retry_after, job_id))
-        self._connection.execute(
-            """
-                INSERT INTO job_run (job_id, attempt_no, worker_id, exit_status, error)
-                SELECT id, attempts, COALESCE(locked_by, 'unknown'), 'failed', %s
-                FROM job_state WHERE job_id = %s
-            """,
-            (error, job_id),
-        )
+        self._connection.execute(query, (retry_after, job_id, sanitized_error))
         self._connection.commit()
 
     def _update_status(self, job_id: UUID, status: str) -> None:

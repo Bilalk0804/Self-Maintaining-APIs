@@ -29,11 +29,14 @@ _SKIP_DIRS = {
 
 def source_files(repo_root: Path) -> list[Path]:
     """List candidate source files in a repository, skipping vendored directories."""
+    resolved_root = repo_root.resolve()
     out: list[Path] = []
     for path in repo_root.rglob("*"):
-        if path.suffix not in _SOURCE_SUFFIXES or not path.is_file():
+        if path.is_symlink() or path.suffix not in _SOURCE_SUFFIXES or not path.is_file():
             continue
         if any(part in _SKIP_DIRS for part in path.parts):
+            continue
+        if not path.resolve().is_relative_to(resolved_root):
             continue
         out.append(path)
     return sorted(out)
@@ -67,7 +70,7 @@ def _ripgrep(rg: str, repo_root: Path, probes: list[str]) -> list[Path] | None:
         cmd += ["--glob", f"!{directory}/**"]
     for probe in probes:
         cmd += ["-e", probe]
-    cmd.append(str(repo_root))
+    cmd += ["--", str(repo_root)]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
     except (OSError, subprocess.SubprocessError):

@@ -38,3 +38,28 @@ def test_sandbox_reports_failure_and_network_policy(tmp_path: Path) -> None:
 def test_sandbox_rejects_empty_commands(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="must not be empty"):
         SandboxRunner().run(tmp_path, "syntax", [])
+
+
+def test_sandbox_scrubs_host_secrets_and_skips_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SECRET_GITHUB_TOKEN", "ghp_super_secret")
+    external = tmp_path.parent / "outside_secret.txt"
+    external.write_text("sensitive", encoding="utf-8")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "leak.txt").symlink_to(external)
+
+    result = SandboxRunner().run(
+        repo,
+        "tests",
+        [
+            "python",
+            "-c",
+            "import os, pathlib; "
+            "assert 'SECRET_GITHUB_TOKEN' not in os.environ; "
+            "assert not pathlib.Path('leak.txt').exists()",
+        ],
+    )
+
+    assert result.passed is True

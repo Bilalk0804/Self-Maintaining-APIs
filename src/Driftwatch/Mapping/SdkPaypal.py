@@ -15,8 +15,8 @@ from Driftwatch.Mapping.Model import PROVENANCE_CONFIDENCE, SurfaceMap, SurfaceM
 from Driftwatch.Surfaces import op_ref
 
 _METHOD_RE = re.compile(
-    r"(?ms)^\s*def\s+(?P<name>[a-zA-Z_]\w*)\s*\((?P<params>.*?)\):"
-    r"(?P<body>.*?)(?=^\s*def\s|\Z)"
+    r"(?ms)^[ \t]*def[ \t]+(?P<name>[a-zA-Z_]\w*)[ \t]*\((?P<params>[^\n]*?)\)[ \t]*(?:->[^\n:]+)?:"
+    r"(?P<body>.*?)(?=^[ \t]*def[ \t]|\Z)"
 )
 _PATH_RE = re.compile(r'\.path\(\s*["\'](?P<path>/[^"\']+)["\']\s*\)')
 _VERB_RE = re.compile(r"\.http_method\(\s*HttpMethodEnum\.(?P<verb>[A-Z]+)\s*\)")
@@ -44,8 +44,16 @@ def derive_paypal_python(
     confidence = PROVENANCE_CONFIDENCE["sdk_source_derived"]
     seen: set[tuple[str, str]] = set()
 
+    resolved_root = sdk_root.resolve()
     for path in sorted(package.glob("controllers/*_controller.py")):
-        source = path.read_text(encoding="utf-8")
+        if path.is_symlink():
+            continue
+        resolved_path = path.resolve()
+        if not resolved_path.is_relative_to(resolved_root):
+            continue
+        if resolved_path.stat().st_size > 5 * 1024 * 1024:
+            continue
+        source = resolved_path.read_text(encoding="utf-8")
         module = f"paypalserversdk.controllers.{path.stem}"
         class_name = _controller_name(path.stem)
         for match in _METHOD_RE.finditer(source):

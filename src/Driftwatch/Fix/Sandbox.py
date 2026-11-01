@@ -12,6 +12,19 @@ from typing import Literal
 
 SandboxPhase = Literal["syntax", "typecheck", "lint", "tests"]
 
+_SAFE_ENV_KEYS = ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "PYTHONPATH", "VIRTUAL_ENV")
+_IGNORED_DIRS = frozenset({".git", ".venv", "venv", "__pycache__", ".pytest_cache", "node_modules"})
+
+
+def _ignore_unsafe_entries(directory: str, contents: list[str]) -> set[str]:
+    """Ignore standard vendored dirs and any symlink escaping the repository."""
+    ignored = {name for name in contents if name in _IGNORED_DIRS}
+    base = Path(directory)
+    for name in contents:
+        if (base / name).is_symlink():
+            ignored.add(name)
+    return ignored
+
 
 @dataclass(frozen=True, slots=True)
 class SandboxResult:
@@ -51,7 +64,7 @@ class SandboxRunner:
         Network access is declared explicitly through the environment variable
         ``DRIFTWATCH_NETWORK``. The runner never silently upgrades a disabled request.
         """
-        if not command:
+        if not command or any(not isinstance(arg, str) or not arg for arg in command):
             raise ValueError("sandbox command must not be empty")
         if not repo_root.is_dir():
             raise FileNotFoundError(f"sandbox repository does not exist: {repo_root}")
@@ -61,17 +74,20 @@ class SandboxRunner:
             shutil.copytree(
                 repo_root,
                 checkout,
-                ignore=shutil.ignore_patterns(
-                    ".git",
-                    ".venv",
-                    "venv",
-                    "__pycache__",
-                    ".pytest_cache",
-                    "node_modules",
-                ),
+                symlinks=False,
+                ignore=_ignore_unsafe_entries,
             )
-            environment = os.environ.copy()
+            environment = {
+                key: os.environ[key] for key in _SAFE_ENV_KEYS if key in os.environ
+            }
+            environment["HOME"] = directory
+            environment["TMPDIR"] = directory
+            environment["PYTHONDONTWRITEBYTECODE"] = "1"
             environment["DRIFTWATCH_NETWORK"] = "allowed" if allow_network else "disabled"
+            if not allow_network:
+                environment["HTTP_PROXY"] = "http://127.0.0.1:0"
+                environment["HTTPS_PROXY"] = "http://127.0.0.1:0"
+                environment["ALL_PROXY"] = "http://127.0.0.1:0"
             try:
                 completed = subprocess.run(
                     command,
@@ -81,6 +97,7 @@ class SandboxRunner:
                     text=True,
                     timeout=self._timeout_seconds,
                     check=False,
+                    start_new_session=True,
                 )
             except subprocess.TimeoutExpired as exc:
                 return SandboxResult(

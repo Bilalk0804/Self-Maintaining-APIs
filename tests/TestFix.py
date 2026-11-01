@@ -89,6 +89,38 @@ def test_insert_required_keyword_argument_is_explicitly_configured() -> None:
     assert apply_edits(source, edits) == b"client.create(amount=10, source=token)"
 
 
+def test_codemods_reject_malicious_identifiers_and_path_traversal() -> None:
+    source = b"client.create(old_param=1)"
+    usage = Usage(
+        surface_ref="api:stripe/op:post_v1_charges/param:old_param",
+        match_kind="param_keyword",
+        file_path="payments.py",
+        start_line=1,
+        end_line=1,
+        start_byte=14,
+        end_byte=25,
+        symbol_ref="stripe.Charges.create",
+        snippet="old_param=1",
+        resolution_confidence=0.95,
+    )
+    malicious_finding = Finding(
+        change_fingerprint="change",
+        change_type="param_renamed",
+        severity="breaking",
+        surface_ref=usage.surface_ref,
+        usage=usage,
+        confidence=0.95,
+        renamed_to="api:stripe/op:post_v1_charges/param:evil=1, __import__('os').system('id')#",
+    )
+    name, edits = codemods_mod.plan_edits(
+        malicious_finding, source, codemods_mod.default_registry()
+    )
+    assert (name, edits) == ("", [])
+
+    with pytest.raises(SpliceError, match="escapes repository root"):
+        unified_diff(b"a\n", b"b\n", "../../etc/passwd")
+
+
 class TestGateA4ByteSplicePatches:
     """Gate A4: a codemod's diff touches only the intended bytes."""
 

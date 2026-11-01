@@ -7,12 +7,51 @@ and scored.
 
 from __future__ import annotations
 
+import ast
+import keyword
+import re
 from typing import Protocol
 
 from Driftwatch import Tsutil as tsutil
 from Driftwatch.Fix.Splice import Edit
 from Driftwatch.Match.Scorer import Finding
 from Driftwatch.Surfaces import SurfaceRef
+
+_SAFE_KEY_RE = re.compile(r"^[A-Za-z0-9_.:-]+$")
+_SAFE_VALUE_TOKEN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _is_valid_python_identifier(name: str) -> bool:
+    """Return True only when ``name`` is a valid, non-keyword Python identifier."""
+    return bool(name) and name.isidentifier() and not keyword.iskeyword(name)
+
+
+def _escape_string_content(value: str, quote: str) -> str | None:
+    """Reject control characters and escape backslashes/quotes for safe string splicing."""
+    if any(ch in value for ch in ("\n", "\r", "\x00")):
+        return None
+    if not _SAFE_KEY_RE.fullmatch(value):
+        return None
+    escaped = value.replace("\\", "\\\\").replace(quote, f"\\{quote}")
+    return f"{quote}{escaped}{quote}"
+
+
+def _is_safe_keyword_addition(addition: str) -> bool:
+    """Validate that ``name=value`` has a valid identifier name and a safe value token/literal."""
+    if "=" not in addition or any(ch in addition for ch in ("\n", "\r", ";", "\x00")):
+        return False
+    name, value = addition.split("=", 1)
+    name = name.strip()
+    value = value.strip()
+    if not _is_valid_python_identifier(name) or not value:
+        return False
+    if _SAFE_VALUE_TOKEN_RE.fullmatch(value):
+        return True
+    try:
+        ast.literal_eval(value)
+        return True
+    except (ValueError, SyntaxError):
+        return False
 
 
 class Codemod(Protocol):
@@ -42,7 +81,12 @@ class RenameKeywordArgument:
             return []
         old_name = SurfaceRef.parse(finding.surface_ref).subident
         new_name = SurfaceRef.parse(finding.renamed_to).subident
-        if not old_name or not new_name:
+        if (
+            not old_name
+            or not new_name
+            or not _is_valid_python_identifier(old_name)
+            or not _is_valid_python_identifier(new_name)
+        ):
             return []
 
         node = _node_at(src, finding.usage.start_byte, finding.usage.end_byte, "keyword_argument")
@@ -83,11 +127,16 @@ class RenameDictKey:
         if key_node is None or tsutil.string_value(key_node, src) != old_name:
             return []
         quote = tsutil.text(key_node, src)[:1]
+        if quote not in ("'", '"'):
+            return []
+        safe_literal = _escape_string_content(new_name, quote)
+        if safe_literal is None:
+            return []
         return [
             Edit(
                 start_byte=key_node.start_byte,
                 end_byte=key_node.end_byte,
-                replacement=f"{quote}{new_name}{quote}".encode(),
+                replacement=safe_literal.encode("utf-8"),
                 rationale=f"rename dict key {old_name} -> {new_name}",
             )
         ]
@@ -119,11 +168,14 @@ class ReplaceStringLiteral:
         quote = tsutil.text(node, src)[:1]
         if quote not in ("'", '"'):
             return []
+        safe_literal = _escape_string_content(new_value, quote)
+        if safe_literal is None:
+            return []
         return [
             Edit(
                 start_byte=node.start_byte,
                 end_byte=node.end_byte,
-                replacement=f"{quote}{new_value}{quote}".encode(),
+                replacement=safe_literal.encode("utf-8"),
                 rationale=f"replace {current!r} with {new_value!r}",
             )
         ]
@@ -144,13 +196,13 @@ class InsertRequiredKeywordArgument:
         if finding.usage.match_kind != "operation_call":
             return []
         addition = self._parameters.get(finding.surface_ref)
-        if not addition or "=" not in addition:
+        if not addition or not _is_safe_keyword_addition(addition):
             return []
         node = _node_at(src, finding.usage.start_byte, finding.usage.end_byte, "call")
         if node is None:
             return []
         args = node.child_by_field_name("arguments")
-        parameter_name = addition.split("=", 1)[0]
+        parameter_name = addition.split("=", 1)[0].strip()
         if args is None or any(
             tsutil.text(child, src).startswith(parameter_name) for child in args.named_children
         ):

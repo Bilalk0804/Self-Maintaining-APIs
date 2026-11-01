@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import difflib
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 
 from Driftwatch import Tsutil as tsutil
 
@@ -82,12 +83,25 @@ def verify_patch(patched: bytes, expected_edits: int, lang: str = "python") -> N
         raise SpliceError("patched source does not parse cleanly")
 
 
+def validate_repo_relative_path(path: str) -> str:
+    """Ensure a relative path stays strictly within the repository and contains no control chars."""
+    if not path or any(ch in path for ch in ("\n", "\r", "\x00", "\\")):
+        raise SpliceError(f"invalid file path: {path!r}")
+    pure = PurePosixPath(path)
+    if pure.is_absolute() or ".." in pure.parts:
+        raise SpliceError(f"file path escapes repository root: {path!r}")
+    return pure.as_posix()
+
+
 def unified_diff(original: bytes, patched: bytes, path: str) -> str:
     """Render a unified diff between two versions of a file."""
+    safe_path = validate_repo_relative_path(path)
     before = original.decode("utf-8", errors="replace").splitlines(keepends=True)
     after = patched.decode("utf-8", errors="replace").splitlines(keepends=True)
     return "".join(
-        difflib.unified_diff(before, after, fromfile=f"a/{path}", tofile=f"b/{path}", n=3)
+        difflib.unified_diff(
+            before, after, fromfile=f"a/{safe_path}", tofile=f"b/{safe_path}", n=3
+        )
     )
 
 

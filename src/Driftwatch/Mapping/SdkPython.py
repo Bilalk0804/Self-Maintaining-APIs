@@ -126,8 +126,16 @@ def derive_stripe_python(
     accessors: dict[ClassKey, dict[str, ClassKey]] = {}
     typed_dicts: dict[ClassKey, list[str]] = {}
 
+    resolved_root = sdk_root.resolve()
     for path in sorted(p for p in pkg.rglob("*.py") if "/test" not in p.as_posix()):
-        src = path.read_bytes()
+        if path.is_symlink():
+            continue
+        resolved_path = path.resolve()
+        if not resolved_path.is_relative_to(resolved_root):
+            continue
+        if resolved_path.stat().st_size > 5 * 1024 * 1024:
+            continue
+        src = resolved_path.read_bytes()
         tree = tsutil.parse(src, "python")
         if tsutil.has_errors(tree):
             continue

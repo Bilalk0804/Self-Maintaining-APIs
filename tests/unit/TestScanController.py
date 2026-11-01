@@ -112,3 +112,15 @@ def test_repository_authorizer_rejects_missing_or_other_tenant_repository(
 
     with pytest.raises(PermissionError, match="not accessible"):
         authorizer.resolve(PRINCIPAL, "00000000-0000-0000-0000-000000000001")
+
+
+def test_controller_rejects_git_flag_injection_and_path_traversal() -> None:
+    with pytest.raises(ValueError, match="invalid commit_sha"):
+        controller(Queue(None)).submit_scan(
+            PRINCIPAL, ScanRequest("repo-1", "stripe", "--upload-pack=evil")
+        )
+
+    with pytest.raises(ValueError, match="invalid repository_id"):
+        controller(Queue(None)).submit_scan(
+            PRINCIPAL, ScanRequest("../../etc/passwd", "stripe", "abc1234")
+        )

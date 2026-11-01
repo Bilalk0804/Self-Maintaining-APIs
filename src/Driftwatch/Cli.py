@@ -165,6 +165,7 @@ def fix(
     edits_by_file: dict[str, list] = {}
     applied: list[tuple[str, str, str]] = []
 
+    repo_root = repo.resolve()
     for item in raw:
         finding = Finding(
             change_fingerprint=item["change_fingerprint"],
@@ -176,8 +177,11 @@ def fix(
             renamed_to=item.get("renamed_to"),
             detail=item.get("detail", ""),
         )
-        path = repo / finding.usage.file_path
-        if not path.is_file():
+        candidate = repo / finding.usage.file_path
+        if candidate.is_symlink():
+            continue
+        path = candidate.resolve()
+        if not path.is_relative_to(repo_root) or not path.is_file():
             continue
         name, edits = codemods_mod.plan_edits(finding, path.read_bytes(), registry)
         if not edits:

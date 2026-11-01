@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -13,6 +14,12 @@ from Driftwatch.Controllers.Auth import AuthenticatedPrincipal
 from Driftwatch.Providers import get_provider
 from Driftwatch.Services.Growth import ImpactSummary
 from Driftwatch.Services.JobQueue import JobQueue
+
+_COMMIT_SHA_RE = re.compile(r"^(?:[0-9a-fA-F]{6,40}|[A-Za-z0-9_.-]{1,64})$")
+_REPO_ID_RE = re.compile(
+    r"^(?:[0-9a-fA-F-]{36}|[A-Za-z0-9_.-]{1,100}(?:/[A-Za-z0-9_.-]{1,100})?)$"
+)
+_ALLOWED_TRIGGERS = frozenset({"scheduled", "new_change", "push", "manual"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,11 +123,13 @@ class ScanController:
         self, principal: AuthenticatedPrincipal, request: ScanRequest
     ) -> ScanResponse:
         """Validate and enqueue a scan without performing pipeline work in the handler."""
+        if not principal.account_id or not principal.account_id.strip():
+            raise PermissionError("authenticated account_id is required")
         self._validate_request(request)
         repository = self._repositories.resolve(principal, request.repository_id)
         if repository.account_id != principal.account_id:
             raise PermissionError("repository is not owned by the authenticated account")
-        idempotency_key = self._idempotency_key(principal, request)
+        idempotency_key = self._idempotency_key(principal, request, repository.repository_id)
         job_id = self._queue.enqueue(
             "scan_repository",
             idempotency_key,
@@ -146,18 +155,28 @@ class ScanController:
 
     @staticmethod
     def _validate_request(request: ScanRequest) -> None:
-        """Reject incomplete requests before they reach the queue."""
-        if not request.repository_id.strip():
+        """Reject incomplete or malformed requests before they reach the queue."""
+        repo_id = request.repository_id.strip()
+        if not repo_id:
             raise ValueError("repository_id must not be empty")
-        if not request.commit_sha.strip():
+        if ".." in repo_id or repo_id.startswith("-") or not _REPO_ID_RE.fullmatch(repo_id):
+            raise ValueError("invalid repository_id")
+        commit_sha = request.commit_sha.strip()
+        if not commit_sha:
             raise ValueError("commit_sha must not be empty")
+        if commit_sha.startswith("-") or not _COMMIT_SHA_RE.fullmatch(commit_sha):
+            raise ValueError("invalid commit_sha")
         if not request.trigger.strip():
             raise ValueError("trigger must not be empty")
+        if request.trigger not in _ALLOWED_TRIGGERS:
+            raise ValueError(f"unsupported trigger {request.trigger!r}")
         get_provider(request.provider)
 
     @staticmethod
     def _idempotency_key(
-        principal: AuthenticatedPrincipal, request: ScanRequest
+        principal: AuthenticatedPrincipal,
+        request: ScanRequest,
+        canonical_repo_id: str | None = None,
     ) -> str:
         """Hash canonical, server-resolved identity and revision fields."""
         canonical = json.dumps(
@@ -165,7 +184,7 @@ class ScanController:
                 "account_id": principal.account_id,
                 "commit_sha": request.commit_sha,
                 "provider": request.provider,
-                "repository_id": request.repository_id,
+                "repository_id": canonical_repo_id or request.repository_id,
             },
             separators=(",", ":"),
             sort_keys=True,

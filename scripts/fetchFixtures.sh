@@ -25,20 +25,30 @@ for name in "${!SPECS[@]}"; do
     echo "have $name"
     continue
   fi
-  echo "fetching $name (${SPECS[$name]:0:7})"
-  curl -sL --fail -o "$CACHE/$name" \
-    "https://raw.githubusercontent.com/stripe/openapi/${SPECS[$name]}/openapi/spec3.json"
+  sha="${SPECS[$name]}"
+  echo "fetching $name (${sha:0:7})"
+  curl --proto '=https' --tlsv1.2 -sSfL --max-filesize 25000000 \
+    -o "$CACHE/$name.tmp" \
+    "https://raw.githubusercontent.com/stripe/openapi/${sha}/openapi/spec3.json"
+  mv "$CACHE/$name.tmp" "$CACHE/$name"
 done
 
-# stripe-python at master, the source the Surface Map is derived from.
+STRIPE_PYTHON_REF="v11.2.0"
+
+# stripe-python at a pinned tag, the source the Surface Map is derived from.
 if [[ -d "$CACHE/stripe-python/stripe" ]]; then
   echo "have stripe-python"
 else
-  echo "fetching stripe-python"
-  curl -sL --fail -o "$CACHE/sp.tar.gz" \
-    "https://codeload.github.com/stripe/stripe-python/tar.gz/refs/heads/master"
+  echo "fetching stripe-python ($STRIPE_PYTHON_REF)"
+  curl --proto '=https' --tlsv1.2 -sSfL --max-filesize 50000000 \
+    -o "$CACHE/sp.tar.gz" \
+    "https://codeload.github.com/stripe/stripe-python/tar.gz/refs/tags/${STRIPE_PYTHON_REF}"
   mkdir -p "$CACHE/stripe-python"
-  tar xzf "$CACHE/sp.tar.gz" -C "$CACHE/stripe-python" --strip-components=1
+  tar xzf "$CACHE/sp.tar.gz" \
+    -C "$CACHE/stripe-python" \
+    --strip-components=1 \
+    --no-same-owner \
+    --no-same-permissions
   rm -f "$CACHE/sp.tar.gz"
 fi
 

@@ -655,3 +655,23 @@ SELECT
     round(avg(predicted_confidence), 3) AS avg_predicted
 FROM pr_outcome
 GROUP BY change_type;
+
+-- ============================================================================
+-- ROW-LEVEL SECURITY (DEFENSE IN DEPTH FOR MULTI-TENANT ISOLATION)
+-- ============================================================================
+
+ALTER TABLE repo ENABLE ROW LEVEL SECURITY;
+CREATE POLICY repo_tenant_isolation ON repo
+    USING (account_id = nullif(current_setting('app.current_account_id', true), '')::uuid);
+
+ALTER TABLE finding ENABLE ROW LEVEL SECURITY;
+CREATE POLICY finding_tenant_isolation ON finding
+    USING (account_id = nullif(current_setting('app.current_account_id', true), '')::uuid);
+
+ALTER TABLE alert ENABLE ROW LEVEL SECURITY;
+CREATE POLICY alert_tenant_isolation ON alert
+    USING (account_id = nullif(current_setting('app.current_account_id', true), '')::uuid);
+
+ALTER TABLE notification_channel ENABLE ROW LEVEL SECURITY;
+CREATE POLICY notification_channel_tenant_isolation ON notification_channel
+    USING (account_id = nullif(current_setting('app.current_account_id', true), '')::uuid);
