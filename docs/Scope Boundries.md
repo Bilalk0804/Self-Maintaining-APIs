@@ -29,6 +29,10 @@ The first Python indexer slice now supports OpenAI OpenAPI JSON and provable Raz
 SDK HTTP call literals. It intentionally quarantines malformed payloads and does not infer
 operations from arbitrary prose, HTML, or unrecognized source shapes.
 
+Durable raw snapshot persistence and a queue-backed indexing worker now connect this slice.
+The worker marks malformed payloads as quarantined and retains the original bytes; provider
+catalog setup and production object storage wiring remain separate deployment tasks.
+
 ## Ground-truth rule
 
 Only sources marked as `ground_truth` may produce authoritative surface data. Narrative

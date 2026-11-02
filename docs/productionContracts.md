@@ -100,6 +100,14 @@ emits only statically provable HTTP operations. Raw payload persistence and inde
 defined in `migrations/003ProviderPayloads.sql`; applying that migration requires the
 provider catalog tables from `docs/dataModel.sql`.
 
+Durable persistence and queue processing are implemented in
+[`src/Driftwatch/Services/SourceIngestion.py`](../src/Driftwatch/Services/SourceIngestion.py).
+`SourceSnapshotRepository.ingest()` stores bytes before parsing and deduplicates by
+`(source_id, content_sha256)`. `SourceIndexWorker` claims `index_source_snapshot` jobs,
+persists normalized entries in `source_snapshot_index`, marks successful snapshots as
+`built`, and quarantines parser failures without deleting the raw payload. The additional
+index table is defined in `migrations/004SourceIndex.sql`.
+
 ### Boundary
 
 ```python
