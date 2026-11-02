@@ -51,13 +51,7 @@ jobs:
       - name: Check formatting and lint
         run: uv run ruff check src/Driftwatch tests
 
-      - name: Run tests
-        env:
-          DRIFTWATCH_TEST_DATABASE_URL: >-
-            host=127.0.0.1 dbname=driftwatch_ci user=driftwatch password=driftwatch
-        run: uv run pytest
-
-      - name: Apply PostgreSQL migration
+      - name: Prepare PostgreSQL schema for tests
         env:
           PGHOST: 127.0.0.1
           PGPORT: "5432"
@@ -67,6 +61,12 @@ jobs:
         run: |
           psql --set ON_ERROR_STOP=1 --file migrations/001JobQueue.sql
           psql --set ON_ERROR_STOP=1 --file migrations/002NormalizeJobQueue.sql
+
+      - name: Run tests
+        env:
+          DRIFTWATCH_TEST_DATABASE_URL: >-
+            host=127.0.0.1 dbname=driftwatch_ci user=driftwatch password=driftwatch
+        run: uv run pytest
 
       - name: Verify PostgreSQL migration
         env:
