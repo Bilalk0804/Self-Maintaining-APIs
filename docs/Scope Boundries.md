@@ -25,6 +25,10 @@ The adapters may identify that a source changed, but a changed source must not e
 surface-diff pipeline until its payload has been parsed by a source-specific indexer that
 produces the shared `SurfaceIndex` contract.
 
+The first Python indexer slice now supports OpenAI OpenAPI JSON and provable Razorpay Python
+SDK HTTP call literals. It intentionally quarantines malformed payloads and does not infer
+operations from arbitrary prose, HTML, or unrecognized source shapes.
+
 ## Ground-truth rule
 
 Only sources marked as `ground_truth` may produce authoritative surface data. Narrative

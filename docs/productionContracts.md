@@ -93,6 +93,13 @@ They bind provider metadata to the shared conditional HTTP poller and do not yet
 provider payloads into surface indexes; source-specific indexing remains the next research
 step for each provider.
 
+The first indexing slice is implemented in
+[`src/Driftwatch/Watch/PayloadIndexers.py`](../src/Driftwatch/Watch/PayloadIndexers.py):
+OpenAI OpenAPI JSON is normalized through the canonical indexer, and Razorpay Python source
+emits only statically provable HTTP operations. Raw payload persistence and index status are
+defined in `migrations/003ProviderPayloads.sql`; applying that migration requires the
+provider catalog tables from `docs/dataModel.sql`.
+
 ### Boundary
 
 ```python
