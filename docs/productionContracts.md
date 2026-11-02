@@ -78,7 +78,13 @@ network access.
 
 ## 2. Provider-specific OpenAI and Razorpay adapters
 
-**Status:** `research`
+**Status:** `stubbed`
+
+OpenAI and Razorpay polling adapters are implemented in
+[`src/Driftwatch/Watch/ProviderAdapters.py`](../src/Driftwatch/Watch/ProviderAdapters.py).
+They bind provider metadata to the shared conditional HTTP poller and do not yet parse
+provider payloads into surface indexes; source-specific indexing remains the next research
+step for each provider.
 
 ### Boundary
 
