@@ -38,6 +38,10 @@ persisted and enqueue an idempotent indexing job, while unchanged and failed att
 recorded separately. Full provider-catalog migration provisioning is still a deployment
 task.
 
+The provider catalog is now seeded through `migrations/003ProviderCatalog.sql`, and CI
+provisions the catalog plus source-ingestion/index tables before integration tests. Real
+object-storage offload and provider-specific production fixtures remain deferred.
+
 ## Ground-truth rule
 
 Only sources marked as `ground_truth` may produce authoritative surface data. Narrative

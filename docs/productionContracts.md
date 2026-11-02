@@ -115,6 +115,12 @@ from `docs/dataModel.sql` must be installed before migrations `003ProviderPayloa
 `004SourceIndex.sql`; the current CI queue-only database does not yet provision that full
 catalog.
 
+CI now provisions the catalog and ingestion schema in this order:
+`001JobQueue.sql`, `002NormalizeJobQueue.sql`, `003ProviderCatalog.sql`,
+`003ProviderPayloads.sql`, and `004SourceIndex.sql`. The PostgreSQL integration test covers
+polling a seeded Razorpay source, deduplicating the raw snapshot, enqueueing the indexing
+job, and persisting a built normalized index.
+
 ### Boundary
 
 ```python
