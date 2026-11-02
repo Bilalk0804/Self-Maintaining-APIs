@@ -3,6 +3,13 @@
 This document records limitations that are intentional and must not be interpreted as
 completed production behavior.
 
+## Implementation language decision
+
+Provider-specific ingestion, validation, parsing, and indexing will remain inside the
+existing Python application. A separate .NET service is not part of the current
+architecture. Any future implementation must use the existing Python domain contracts,
+PostgreSQL persistence, queue services, and fake GCP/gcloud boundaries.
+
 ## Provider source adapters
 
 The OpenAI and Razorpay adapters currently poll and watermark provider sources. They do not
