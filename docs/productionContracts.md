@@ -5,6 +5,9 @@ until the product research phase is complete. It defines what each implementatio
 provide without committing the project to a provider, deployment topology, or billing
 design prematurely.
 
+See [Scope Boundries.md](./Scope%20Boundries.md) for the current implementation limitations
+and intentionally deferred behavior.
+
 The local development and CI deployment target is **fake GCP/gcloud**: interfaces must be
 usable with deterministic in-memory or local emulators first, and no implementation may
 require a real GCP project, paid API, or production credential during tests.
