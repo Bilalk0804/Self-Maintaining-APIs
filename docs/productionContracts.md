@@ -103,7 +103,12 @@ publisher code.
 
 ## 3. FastAPI HTTP application
 
-**Status:** `research`
+**Status:** `stubbed`
+
+The dependency-injected application factory is implemented in
+[`src/Driftwatch/Http/Application.py`](../src/Driftwatch/Http/Application.py). It is
+deliberately not a production server entry point yet: deployment configuration, database
+readiness, rate limits, public change-feed routes, and webhook handling remain open.
 
 ### Boundary
 
