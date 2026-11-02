@@ -108,6 +108,13 @@ persists normalized entries in `source_snapshot_index`, marks successful snapsho
 `built`, and quarantines parser failures without deleting the raw payload. The additional
 index table is defined in `migrations/004SourceIndex.sql`.
 
+`SourcePollingCoordinator.poll_once()` now connects adapters to this durable path. It loads
+the persisted watermark, records changed/unchanged/failed poll attempts, ingests changed
+bytes, and enqueues an idempotent `index_source_snapshot` job. The provider catalog tables
+from `docs/dataModel.sql` must be installed before migrations `003ProviderPayloads.sql` and
+`004SourceIndex.sql`; the current CI queue-only database does not yet provision that full
+catalog.
+
 ### Boundary
 
 ```python

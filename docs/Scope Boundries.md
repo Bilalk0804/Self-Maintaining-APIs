@@ -33,6 +33,11 @@ Durable raw snapshot persistence and a queue-backed indexing worker now connect 
 The worker marks malformed payloads as quarantined and retains the original bytes; provider
 catalog setup and production object storage wiring remain separate deployment tasks.
 
+Polling results are now connected through `SourcePollingCoordinator`: changed payloads are
+persisted and enqueue an idempotent indexing job, while unchanged and failed attempts are
+recorded separately. Full provider-catalog migration provisioning is still a deployment
+task.
+
 ## Ground-truth rule
 
 Only sources marked as `ground_truth` may produce authoritative surface data. Narrative

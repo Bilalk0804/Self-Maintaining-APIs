@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -12,6 +12,7 @@ import orjson
 
 from Driftwatch.Services.JobQueue import JobQueue
 from Driftwatch.Watch.PayloadIndexers import IndexedPayload, PayloadIndexer, PayloadIndexingError
+from Driftwatch.Watch.SourceAdapters import PollResult, SourceState
 
 
 class SourceIngestionConnection(Protocol):
@@ -32,6 +33,13 @@ class IngestedSnapshot:
     source_id: UUID
     content_sha256: str
     created: bool
+
+
+class PollingAdapter(Protocol):
+    """Source adapter consumed by the durable polling coordinator."""
+
+    def poll(self, state: SourceState) -> PollResult:
+        """Poll using the supplied persisted watermark."""
 
 
 class SourceSnapshotRepository:
@@ -160,6 +168,196 @@ class SourceSnapshotRepository:
                 WHERE id = %s
             """,
             (error[:2000], snapshot_id),
+        )
+        self._connection.commit()
+
+
+class SourcePollingCoordinator:
+    """Persist poll outcomes, ingest changed bytes, and enqueue indexing work."""
+
+    def __init__(
+        self,
+        connection: SourceIngestionConnection,
+        snapshots: SourceSnapshotRepository,
+        queue: JobQueue,
+    ) -> None:
+        self._connection = connection
+        self._snapshots = snapshots
+        self._queue = queue
+
+    def poll_once(
+        self,
+        source_id: UUID,
+        adapter: PollingAdapter,
+        *,
+        correlation_id: str | None = None,
+    ) -> UUID | None:
+        """Poll one source and return the snapshot ID when content changed."""
+        state = self._load_state(source_id)
+        started_at = datetime.now(UTC)
+        try:
+            result = adapter.poll(state)
+        except Exception as error:
+            self._record_poll(
+                source_id,
+                started_at,
+                status="failed",
+                error_code=type(error).__name__,
+                error_message=str(error),
+                correlation_id=correlation_id,
+            )
+            self._record_failure(source_id)
+            raise
+
+        self._persist_state(source_id, result.state, result, started_at)
+        if not result.changed:
+            self._record_poll(
+                source_id,
+                started_at,
+                status="unchanged",
+                http_status=result.status_code,
+                correlation_id=correlation_id,
+            )
+            return None
+        if result.payload is None:
+            self._record_poll(
+                source_id,
+                started_at,
+                status="rejected",
+                http_status=result.status_code,
+                error_code="missing_payload",
+                error_message="changed poll result contained no payload",
+                correlation_id=correlation_id,
+            )
+            raise ValueError("changed poll result must contain a payload")
+
+        snapshot = self._snapshots.ingest(
+            source_id,
+            result.payload,
+            upstream_ref=result.state.etag or result.state.last_modified,
+            fetched_at=started_at,
+        )
+        self._record_poll(
+            source_id,
+            started_at,
+            status="changed",
+            http_status=result.status_code,
+            content_sha256=snapshot.content_sha256,
+            byte_size=len(result.payload),
+            correlation_id=correlation_id,
+        )
+        self._queue.enqueue(
+            "index_source_snapshot",
+            f"index:{source_id}:{snapshot.content_sha256}",
+            {
+                "snapshot_id": str(snapshot.id),
+                "source_id": str(source_id),
+                "revision": result.state.etag or result.state.content_hash or "unknown",
+            },
+            priority=25,
+        )
+        return snapshot.id
+
+    def _load_state(self, source_id: UUID) -> SourceState:
+        row = self._connection.execute(
+            """
+                SELECT etag, last_modified, content_sha256
+                FROM api_source_state
+                WHERE source_id = %s
+            """,
+            (source_id,),
+        ).fetchone()
+        self._connection.commit()
+        if row is None:
+            return SourceState()
+        return SourceState(etag=row[0], last_modified=row[1], content_hash=row[2])
+
+    def _persist_state(
+        self,
+        source_id: UUID,
+        state: SourceState,
+        result: PollResult,
+        started_at: datetime,
+    ) -> None:
+        now = datetime.now(UTC)
+        self._connection.execute(
+            """
+                INSERT INTO api_source_state (
+                    source_id, etag, last_modified, content_sha256,
+                    last_polled_at, last_changed_at, last_ok_at,
+                    consecutive_failures, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s)
+                ON CONFLICT (source_id) DO UPDATE SET
+                    etag = EXCLUDED.etag,
+                    last_modified = EXCLUDED.last_modified,
+                    content_sha256 = EXCLUDED.content_sha256,
+                    last_polled_at = EXCLUDED.last_polled_at,
+                    last_changed_at = COALESCE(
+                        EXCLUDED.last_changed_at, api_source_state.last_changed_at
+                    ),
+                    last_ok_at = EXCLUDED.last_ok_at,
+                    consecutive_failures = 0,
+                    updated_at = EXCLUDED.updated_at
+            """,
+            (
+                source_id,
+                state.etag,
+                state.last_modified,
+                state.content_hash,
+                started_at,
+                now if result.changed else None,
+                now,
+                now,
+            ),
+        )
+        self._connection.commit()
+
+    def _record_failure(self, source_id: UUID) -> None:
+        self._connection.execute(
+            """
+                INSERT INTO api_source_state (source_id, consecutive_failures, updated_at)
+                VALUES (%s, 1, now())
+                ON CONFLICT (source_id) DO UPDATE SET
+                    consecutive_failures = api_source_state.consecutive_failures + 1,
+                    updated_at = now()
+            """,
+            (source_id,),
+        )
+        self._connection.commit()
+
+    def _record_poll(
+        self,
+        source_id: UUID,
+        started_at: datetime,
+        *,
+        status: str,
+        http_status: int | None = None,
+        content_sha256: str | None = None,
+        byte_size: int | None = None,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        correlation_id: str | None = None,
+    ) -> None:
+        self._connection.execute(
+            """
+                INSERT INTO api_source_poll (
+                    source_id, started_at, completed_at, status, http_status,
+                    content_sha256, byte_size, error_code, error_message, correlation_id
+                )
+                VALUES (%s, %s, now(), %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                source_id,
+                started_at,
+                status,
+                http_status,
+                content_sha256,
+                byte_size,
+                error_code,
+                error_message[:2000] if error_message else None,
+                correlation_id,
+            ),
         )
         self._connection.commit()
 
