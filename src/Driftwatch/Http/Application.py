@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from Driftwatch.Controllers.Auth import (
@@ -58,9 +58,16 @@ def create_app(
     token_validator: Auth0TokenValidator,
     *,
     readiness_check: Callable[[], bool] | None = None,
+    enable_api_docs: bool = True,
 ) -> FastAPI:
     """Build a dependency-injected application suitable for fake GCP/gcloud tests."""
-    app = FastAPI(title="Driftwatch API", version="v1")
+    app = FastAPI(
+        title="Driftwatch API",
+        version="v1",
+        docs_url="/docs" if enable_api_docs else None,
+        redoc_url="/redoc" if enable_api_docs else None,
+        openapi_url="/openapi.json" if enable_api_docs else None,
+    )
 
     def authenticated_principal(
         authorization: Annotated[str | None, Header()] = None,
@@ -95,6 +102,13 @@ def create_app(
         if not ready:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="not ready")
         return {"status": "ready"}
+
+    if enable_api_docs:
+
+        @app.get("/api-explorer", include_in_schema=False)
+        async def api_explorer() -> RedirectResponse:
+            """Open the interactive Swagger UI for local API exploration."""
+            return RedirectResponse("/docs", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
     @app.post("/v1/scans", response_model=ScanAccepted, status_code=status.HTTP_202_ACCEPTED)
     async def submit_scan(

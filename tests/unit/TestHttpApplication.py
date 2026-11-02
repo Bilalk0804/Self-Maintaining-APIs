@@ -56,6 +56,25 @@ def test_health_is_public_and_ready_can_be_checked() -> None:
     assert client.get("/readyz").json() == {"status": "ready"}
 
 
+def test_api_explorer_redirects_to_interactive_docs() -> None:
+    client = TestClient(create_app(Controller(), TokenValidator()))
+
+    response = client.get("/api-explorer", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/docs"
+    assert client.get("/docs").status_code == 200
+    assert client.get("/openapi.json").status_code == 200
+
+
+def test_api_docs_can_be_disabled_for_production() -> None:
+    client = TestClient(create_app(Controller(), TokenValidator(), enable_api_docs=False))
+
+    assert client.get("/api-explorer").status_code == 404
+    assert client.get("/docs").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
+
+
 def test_scan_requires_bearer_authentication() -> None:
     client = TestClient(create_app(Controller(), TokenValidator()))
 

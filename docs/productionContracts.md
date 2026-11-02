@@ -167,6 +167,12 @@ The HTTP layer MUST only deserialize requests, authenticate them, call controlle
 typed errors to HTTP responses. It MUST NOT perform provider polling, matching, patching,
 publishing, or direct queue SQL.
 
+The application exposes FastAPI's generated Swagger UI at `/docs` and a friendly
+`/api-explorer` redirect for local UX/API testing. The OpenAPI document at `/openapi.json`
+is generated from the same Pydantic request and response models, so the explorer does not
+maintain a second contract. `enable_api_docs=False` must be used when public interactive
+documentation is not appropriate for a deployment.
+
 ### Required routes to define
 
 | Route | Contract |
