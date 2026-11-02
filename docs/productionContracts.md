@@ -38,7 +38,12 @@ Every production adapter MUST:
 
 ## 1. OpenAI model client
 
-**Status:** `research`
+**Status:** `stubbed`
+
+The fake-first client boundary is implemented in
+[`src/Driftwatch/Services/ModelClient.py`](../src/Driftwatch/Services/ModelClient.py).
+It supports bounded OpenAI-compatible JSON requests and a deterministic scripted client;
+the real API key, selected model, and production endpoint remain deployment configuration.
 
 ### Boundary
 
