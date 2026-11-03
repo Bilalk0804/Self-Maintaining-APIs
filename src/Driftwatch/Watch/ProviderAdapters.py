@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-import httpx
+import httpx2
 
 from Driftwatch.Providers import Provider, ProviderSource, get_provider
 from Driftwatch.Watch.SourceAdapters import HttpSourceAdapter, PollResult, SourceState
@@ -28,7 +28,7 @@ class ConfiguredProviderAdapter:
         provider: Provider,
         source: ProviderSource,
         *,
-        client: httpx.Client | None = None,
+        client: httpx2.Client | None = None,
         max_bytes: int = 10 * 1024 * 1024,
     ) -> None:
         if source not in provider.sources:
@@ -57,7 +57,7 @@ class OpenAIProviderAdapter(ConfiguredProviderAdapter):
         self,
         source: ProviderSource,
         *,
-        client: httpx.Client | None = None,
+        client: httpx2.Client | None = None,
         max_bytes: int = 10 * 1024 * 1024,
     ) -> None:
         super().__init__(
@@ -75,7 +75,7 @@ class RazorpayProviderAdapter(ConfiguredProviderAdapter):
         self,
         source: ProviderSource,
         *,
-        client: httpx.Client | None = None,
+        client: httpx2.Client | None = None,
         max_bytes: int = 10 * 1024 * 1024,
     ) -> None:
         super().__init__(
@@ -90,7 +90,7 @@ def provider_adapter(
     provider: str,
     source_kind: str,
     *,
-    client: httpx.Client | None = None,
+    client: httpx2.Client | None = None,
     max_bytes: int = 10 * 1024 * 1024,
 ) -> ConfiguredProviderAdapter:
     """Create an adapter from stable provider and source-kind configuration."""

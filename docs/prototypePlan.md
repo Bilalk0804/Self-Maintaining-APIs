@@ -38,7 +38,7 @@ findings + recipe     ──(byte-splice)───>  patch.diff               [A
 ### Steps
 
 **S0 — Scaffold (10 min).** `uv` project, Python 3.12. Deps:
-`tree-sitter`, `tree-sitter-python`, `tree-sitter-typescript`, `pydantic`, `httpx`, `typer`,
+`tree-sitter`, `tree-sitter-python`, `tree-sitter-typescript`, `pydantic`, `httpx2`, `typer`,
 `orjson`, `pytest`. Package layout mirroring the design seams:
 
 ```

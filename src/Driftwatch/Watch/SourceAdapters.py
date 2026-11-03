@@ -9,7 +9,7 @@ from ipaddress import ip_address
 from typing import Final
 from urllib.parse import urlparse
 
-import httpx
+import httpx2
 
 _MAX_SPEC_BYTES: Final = 10 * 1024 * 1024  # 10 MB ceiling
 
@@ -64,7 +64,7 @@ class HttpSourceAdapter:
         self,
         url: str,
         *,
-        client: httpx.Client | None = None,
+        client: httpx2.Client | None = None,
         timeout: float = 30.0,
         max_bytes: int = _MAX_SPEC_BYTES,
     ) -> None:
@@ -72,7 +72,7 @@ class HttpSourceAdapter:
             raise ValueError("max_bytes must be positive")
         self.url = url
         self._max_bytes = max_bytes
-        self._client = client or httpx.Client(
+        self._client = client or httpx2.Client(
             timeout=timeout,
             follow_redirects=False,
             trust_env=False,
@@ -91,7 +91,7 @@ class HttpSourceAdapter:
         with self._client.stream(
             "GET", self.url, headers=headers, follow_redirects=False
         ) as response:
-            if response.status_code == httpx.codes.NOT_MODIFIED:
+            if response.status_code == httpx2.codes.NOT_MODIFIED:
                 return PollResult(False, None, state, response.status_code)
             response.raise_for_status()
 

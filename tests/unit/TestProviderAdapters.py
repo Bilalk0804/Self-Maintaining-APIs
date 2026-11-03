@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import httpx
+import httpx2
 import pytest
 
 from Driftwatch.Providers import OPENAI, RAZORPAY, ProviderSource
@@ -12,9 +12,9 @@ from Driftwatch.Watch.ProviderAdapters import (
 from Driftwatch.Watch.SourceAdapters import SourceState
 
 
-def mock_client(payload: bytes = b"source") -> httpx.Client:
-    return httpx.Client(
-        transport=httpx.MockTransport(lambda _: httpx.Response(200, content=payload))
+def mock_client(payload: bytes = b"source") -> httpx2.Client:
+    return httpx2.Client(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, content=payload))
     )
 
 

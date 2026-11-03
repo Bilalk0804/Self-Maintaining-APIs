@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-import httpx
+import httpx2
 import pytest
 
 from Driftwatch.Services.ModelClient import (
@@ -39,20 +39,20 @@ def config(**overrides: object) -> ModelClientConfig:
 
 
 def test_openai_client_sends_bounded_structured_request() -> None:
-    requests: list[httpx.Request] = []
+    requests: list[httpx2.Request] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         requests.append(request)
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={"choices": [{"message": {"content": '{"title":"renamed"}'}}]},
         )
 
     client = OpenAIModelClient(
         config(),
-        client=httpx.Client(
+        client=httpx2.Client(
             base_url="https://example.test/v1",
-            transport=httpx.MockTransport(handler),
+            transport=httpx2.MockTransport(handler),
         ),
     )
 
@@ -68,18 +68,18 @@ def test_openai_client_sends_bounded_structured_request() -> None:
 def test_openai_client_retries_rate_limits() -> None:
     calls = 0
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         nonlocal calls
         calls += 1
         if calls < 3:
-            return httpx.Response(429)
-        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+            return httpx2.Response(429)
+        return httpx2.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
 
     client = OpenAIModelClient(
         config(max_retries=2),
-        client=httpx.Client(
+        client=httpx2.Client(
             base_url="https://example.test/v1",
-            transport=httpx.MockTransport(handler),
+            transport=httpx2.MockTransport(handler),
         ),
     )
 
@@ -90,16 +90,16 @@ def test_openai_client_retries_rate_limits() -> None:
 def test_openai_client_retries_provider_unavailable() -> None:
     calls = 0
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         nonlocal calls
         calls += 1
-        return httpx.Response(503)
+        return httpx2.Response(503)
 
     client = OpenAIModelClient(
         config(max_retries=2),
-        client=httpx.Client(
+        client=httpx2.Client(
             base_url="https://example.test/v1",
-            transport=httpx.MockTransport(handler),
+            transport=httpx2.MockTransport(handler),
         ),
     )
 
@@ -111,7 +111,7 @@ def test_openai_client_retries_provider_unavailable() -> None:
 def test_openai_client_rejects_oversized_request() -> None:
     client = OpenAIModelClient(
         config(max_input_bytes=1),
-        client=httpx.Client(base_url="https://example.test/v1"),
+        client=httpx2.Client(base_url="https://example.test/v1"),
     )
 
     with pytest.raises(ModelResponseInvalid, match="input limit"):
@@ -119,14 +119,14 @@ def test_openai_client_rejects_oversized_request() -> None:
 
 
 def test_openai_client_maps_network_failure() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("offline", request=request)
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("offline", request=request)
 
     client = OpenAIModelClient(
         config(max_retries=0),
-        client=httpx.Client(
+        client=httpx2.Client(
             base_url="https://example.test/v1",
-            transport=httpx.MockTransport(handler),
+            transport=httpx2.MockTransport(handler),
         ),
     )
 

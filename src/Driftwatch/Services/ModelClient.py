@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
+import httpx2
 
 from Driftwatch.Watch.Classifier import ModelClient
 from Driftwatch.Watch.Differ import Delta
@@ -62,10 +62,10 @@ class OpenAIModelClient(ModelClient):
         self,
         config: ModelClientConfig,
         *,
-        client: httpx.Client | None = None,
+        client: httpx2.Client | None = None,
     ) -> None:
         self._config = config
-        self._client = client or httpx.Client(
+        self._client = client or httpx2.Client(
             base_url=config.base_url.rstrip("/"),
             timeout=config.timeout_seconds,
             follow_redirects=False,
@@ -101,11 +101,11 @@ class OpenAIModelClient(ModelClient):
                 last_error = error
             except ModelUnavailable as error:
                 last_error = error
-            except (httpx.TimeoutException, httpx.NetworkError) as error:
+            except (httpx2.TimeoutException, httpx2.NetworkError) as error:
                 unavailable = ModelUnavailable("model provider unavailable")
                 unavailable.__cause__ = error
                 last_error = unavailable
-            except (httpx.HTTPError, ValueError, ModelResponseInvalid) as error:
+            except (httpx2.HTTPError, ValueError, ModelResponseInvalid) as error:
                 raise ModelResponseInvalid("invalid model response") from error
             if attempt < self._config.max_retries:
                 continue

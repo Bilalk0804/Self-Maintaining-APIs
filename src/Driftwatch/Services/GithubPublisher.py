@@ -9,7 +9,7 @@ from pathlib import PurePosixPath
 from typing import Literal
 from urllib.parse import quote
 
-import httpx
+import httpx2
 
 ArtifactKind = Literal["issue", "pull_request"]
 
@@ -73,14 +73,14 @@ class GithubPublisher:
         self,
         token: str,
         *,
-        client: httpx.Client | None = None,
+        client: httpx2.Client | None = None,
         api_base: str = "https://api.github.com",
     ) -> None:
         if not token.strip():
             raise ValueError("GitHub token must not be empty")
         if not api_base.startswith("https://"):
             raise ValueError("GitHub api_base must use HTTPS")
-        self._client = client or httpx.Client(
+        self._client = client or httpx2.Client(
             timeout=30.0, follow_redirects=False, trust_env=False
         )
         self._owns_client = client is None

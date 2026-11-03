@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, Protocol
 
-import httpx
+import httpx2
 
 from Driftwatch.Providers import ProviderSource
 from Driftwatch.Surfaces import SurfaceRef
@@ -49,7 +49,7 @@ class HttpEvidenceRetriever:
         self,
         sources: tuple[ProviderSource, ...],
         *,
-        client: httpx.Client | None = None,
+        client: httpx2.Client | None = None,
         max_bytes: int = 2_000_000,
         max_quotes_per_source: int = 2,
     ) -> None:
@@ -58,7 +58,7 @@ class HttpEvidenceRetriever:
         if max_quotes_per_source <= 0:
             raise ValueError("max_quotes_per_source must be positive")
         self._sources = sources
-        self._client = client or httpx.Client(
+        self._client = client or httpx2.Client(
             timeout=30.0,
             follow_redirects=False,
             trust_env=False,

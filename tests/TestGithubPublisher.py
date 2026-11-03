@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import httpx
+import httpx2
 
 from Driftwatch.Services.GithubPublisher import GithubPublisher, PublishRequest
 
@@ -8,10 +8,10 @@ from Driftwatch.Services.GithubPublisher import GithubPublisher, PublishRequest
 def test_issue_publishing_is_idempotent() -> None:
     calls: list[tuple[str, str]] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         calls.append((request.method, request.url.path))
         if request.method == "GET":
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json=[
                     {
@@ -25,7 +25,7 @@ def test_issue_publishing_is_idempotent() -> None:
 
     publisher = GithubPublisher(
         "test-token",
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        client=httpx2.Client(transport=httpx2.MockTransport(handler)),
         api_base="https://github.test",
     )
     request = PublishRequest(
@@ -46,20 +46,20 @@ def test_issue_publishing_is_idempotent() -> None:
 def test_draft_pull_request_publishes_one_file() -> None:
     calls: list[tuple[str, str]] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         calls.append((request.method, request.url.path))
         if request.method == "GET" and "/git/ref/" in request.url.path:
-            return httpx.Response(200, json={"object": {"sha": "base-sha"}})
+            return httpx2.Response(200, json={"object": {"sha": "base-sha"}})
         if request.method == "GET" and "/contents/" in request.url.path:
-            return httpx.Response(200, json={"sha": "file-sha"})
+            return httpx2.Response(200, json={"sha": "file-sha"})
         if request.method == "GET":
-            return httpx.Response(200, json=[])
+            return httpx2.Response(200, json=[])
         if request.method == "POST" and request.url.path.endswith("/git/refs"):
-            return httpx.Response(201, json={})
+            return httpx2.Response(201, json={})
         if request.method == "PUT":
-            return httpx.Response(200, json={})
+            return httpx2.Response(200, json={})
         if request.method == "POST":
-            return httpx.Response(
+            return httpx2.Response(
                 201,
                 json={"number": 8, "html_url": "https://github.com/acme/app/pull/8"},
             )
@@ -67,7 +67,7 @@ def test_draft_pull_request_publishes_one_file() -> None:
 
     publisher = GithubPublisher(
         "test-token",
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        client=httpx2.Client(transport=httpx2.MockTransport(handler)),
         api_base="https://github.test",
     )
     result = publisher.publish(

@@ -66,3 +66,6 @@ The following remain outside the current implementation scope:
 - Stripe Billing checkout and webhook processing.
 - Container or OS-level production sandbox isolation.
 - Complete database-backed dashboard and billing workflows.
+
+##MVCC Rules
+- MVCC rules should be counter checked after the desgin of the database.

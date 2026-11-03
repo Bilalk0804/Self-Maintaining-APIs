@@ -6,7 +6,7 @@ import hmac
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-import httpx
+import httpx2
 import jwt
 
 
@@ -91,7 +91,7 @@ class Auth0TokenValidator:
             )
         except AuthenticationError:
             raise
-        except (jwt.PyJWTError, httpx.HTTPError, KeyError, OSError) as error:
+        except (jwt.PyJWTError, httpx2.HTTPError, KeyError, OSError) as error:
             raise AuthenticationError("invalid access token") from error
 
         subject = _required_string(claims, "sub")

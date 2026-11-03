@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 
-import httpx
+import httpx2
 
 from Driftwatch.Providers import ProviderSource
 from Driftwatch.Surfaces import SurfaceDescriptor
@@ -12,15 +12,15 @@ from Driftwatch.Watch.SourceAdapters import HttpSourceAdapter, SourceState
 
 
 def test_poll_returns_payload_and_watermark() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: httpx2.Request) -> httpx2.Response:
         assert request.headers["if-none-match"] == "old"
-        return httpx.Response(
+        return httpx2.Response(
             200,
             content=b'{"version": 2}',
             headers={"etag": "new", "last-modified": "today"},
         )
 
-    client = httpx.Client(transport=httpx.MockTransport(handler))
+    client = httpx2.Client(transport=httpx2.MockTransport(handler))
     result = HttpSourceAdapter("https://example.test/spec.json", client=client).poll(
         SourceState(etag="old", content_hash="old-hash")
     )
@@ -31,8 +31,8 @@ def test_poll_returns_payload_and_watermark() -> None:
 
 
 def test_poll_suppresses_identical_content_without_http_validator() -> None:
-    client = httpx.Client(
-        transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b"same"))
+    client = httpx2.Client(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, content=b"same"))
     )
     result = HttpSourceAdapter("https://example.test/spec.json", client=client).poll(
         SourceState(content_hash=sha256(b"same").hexdigest())
@@ -44,9 +44,9 @@ def test_poll_suppresses_identical_content_without_http_validator() -> None:
 
 def test_evidence_retriever_returns_verbatim_provider_quote() -> None:
     source = ProviderSource("changelog_html", "https://example.test/changelog", False)
-    client = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda _: httpx.Response(
+    client = httpx2.Client(
+        transport=httpx2.MockTransport(
+            lambda _: httpx2.Response(
                 200,
                 text="Intro\nPOST /v1/charges requires source\nFooter",
             )
@@ -86,8 +86,8 @@ def test_validate_egress_url_rejects_non_https_and_loopback() -> None:
 def test_poll_rejects_oversized_stream() -> None:
     import pytest
 
-    client = httpx.Client(
-        transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b"x" * 200))
+    client = httpx2.Client(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, content=b"x" * 200))
     )
     adapter = HttpSourceAdapter("https://example.test/spec.json", client=client, max_bytes=100)
 

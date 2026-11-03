@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS job (
 );
 
 CREATE INDEX IF NOT EXISTS job_claim_ix
-    ON job (status, run_after, priority)
+    ON job (priority ASC, run_after ASC)
     WHERE status = 'pending';
 
 CREATE TABLE IF NOT EXISTS job_run (

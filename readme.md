@@ -101,6 +101,19 @@ boundary tests under `tests/integration/`. Run them independently with
 `uv run pytest tests/unit` and `DRIFTWATCH_TEST_DATABASE_URL="..." uv run pytest
 tests/integration`.
 
+## .NET migration
+
+The replacement implementation is being built under [`dotnet/`](dotnet/). The .NET 10
+solution currently contains framework-neutral domain contracts, an EF Core/Npgsql
+infrastructure project, an ASP.NET Core API host, and domain contract tests. The Python
+implementation remains available until each pipeline slice has equivalent .NET coverage.
+Build and test the foundation with:
+
+```bash
+dotnet build dotnet/Driftwatch.slnx
+dotnet test dotnet/Driftwatch.slnx
+```
+
 ## Design decisions worth knowing
 
 - **The Surface Map is derived, not curated.** Provider SDKs are generated from their specs,
