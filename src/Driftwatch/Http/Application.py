@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
@@ -58,12 +59,23 @@ def create_app(
     token_validator: Auth0TokenValidator,
     *,
     readiness_check: Callable[[], bool] | None = None,
+    shutdown: Callable[[], None] | None = None,
     enable_api_docs: bool = True,
 ) -> FastAPI:
     """Build a dependency-injected application suitable for fake GCP/gcloud tests."""
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            if shutdown is not None:
+                shutdown()
+
     app = FastAPI(
         title="Driftwatch API",
         version="v1",
+        lifespan=lifespan,
         docs_url="/docs" if enable_api_docs else None,
         redoc_url="/redoc" if enable_api_docs else None,
         openapi_url="/openapi.json" if enable_api_docs else None,
