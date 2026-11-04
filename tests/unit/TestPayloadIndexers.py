@@ -6,6 +6,7 @@ import pytest
 from Driftwatch.Watch.PayloadIndexers import (
     OpenApiPayloadIndexer,
     PayloadIndexingError,
+    PythonSdkPayloadIndexer,
     RazorpaySdkPayloadIndexer,
 )
 
@@ -80,3 +81,15 @@ def test_razorpay_indexer_quarantines_invalid_or_empty_source() -> None:
         RazorpaySdkPayloadIndexer().index(b"not valid: [", revision="test")
     with pytest.raises(PayloadIndexingError, match="no provable"):
         RazorpaySdkPayloadIndexer().index(b"def f(): return '/v1/payments'", revision="test")
+
+
+def test_paypal_python_sdk_indexer_uses_provider_namespace() -> None:
+    raw = b"""
+def create_order(self):
+    return self.request('/v2/checkout/orders', method='POST')
+"""
+
+    result = PythonSdkPayloadIndexer("paypal").index(raw, revision="commit")
+
+    assert result.provider == "paypal"
+    assert "api:paypal/op:post_v2_checkout_orders" in result.index.entries

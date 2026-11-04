@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -11,6 +12,8 @@ import orjson
 
 from Driftwatch.Surfaces import SurfaceDescriptor, SurfaceIndex, op_ref
 from Driftwatch.Watch.OpenapiIndexer import build_index
+
+_API_PATH_RE = re.compile(r"^/v\d+(?:/|$)")
 
 
 class PayloadIndexingError(ValueError):
@@ -67,28 +70,34 @@ class OpenApiPayloadIndexer:
         return IndexedPayload(self.provider, revision, _sha256(raw), index)
 
 
-class RazorpaySdkPayloadIndexer:
-    """Index provable HTTP operations from a Razorpay Python source payload.
+class PythonSdkPayloadIndexer:
+    """Index provable HTTP operations from a provider Python source payload.
 
     The payload is a UTF-8 source file or a concatenation produced by the source adapter.
     Only string literals containing an API path and an adjacent HTTP method argument are
     emitted; unknown source shapes are ignored rather than guessed.
     """
 
-    provider = "razorpay"
     source_kind = "sdk_source"
+
+    def __init__(self, provider: str) -> None:
+        if not provider.strip():
+            raise ValueError("provider must not be empty")
+        self.provider = provider
 
     def index(self, raw: bytes, *, revision: str) -> IndexedPayload:
         try:
             tree = ast.parse(raw.decode("utf-8"))
         except (UnicodeDecodeError, SyntaxError) as error:
-            raise PayloadIndexingError("Razorpay payload is not valid Python source") from error
+            raise PayloadIndexingError(
+                f"{self.provider} payload is not valid Python source"
+            ) from error
         index = SurfaceIndex(self.provider, revision)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not node.args:
                 continue
             path = _string_value(node.args[0])
-            if path is None or not path.startswith("/v1/"):
+            if path is None or not _API_PATH_RE.match(path):
                 continue
             method = _method_name(node)
             if method is None:
@@ -102,8 +111,17 @@ class RazorpaySdkPayloadIndexer:
                 ),
             )
         if not index.entries:
-            raise PayloadIndexingError("Razorpay source contained no provable API operations")
+            raise PayloadIndexingError(
+                f"{self.provider} source contained no provable API operations"
+            )
         return IndexedPayload(self.provider, revision, _sha256(raw), index)
+
+
+class RazorpaySdkPayloadIndexer(PythonSdkPayloadIndexer):
+    """Index provable HTTP operations from a Razorpay Python source payload."""
+
+    def __init__(self) -> None:
+        super().__init__("razorpay")
 
 
 def _string_value(node: ast.AST) -> str | None:

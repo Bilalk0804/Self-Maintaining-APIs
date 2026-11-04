@@ -14,6 +14,7 @@ from Driftwatch.Services.SourceIngestion import SourceIndexWorker, SourceSnapsho
 from Driftwatch.Services.WorkerRuntime import WorkerRuntime, WorkerRuntimeConfig
 from Driftwatch.Watch.PayloadIndexers import (
     OpenApiPayloadIndexer,
+    PythonSdkPayloadIndexer,
     RazorpaySdkPayloadIndexer,
 )
 
@@ -26,6 +27,7 @@ def build_worker(connection: psycopg.Connection[object]) -> SourceIndexWorker:
         {
             ("openai", "openapi"): OpenApiPayloadIndexer(),
             ("paypal", "openapi"): OpenApiPayloadIndexer("paypal"),
+            ("paypal", "sdk_source"): PythonSdkPayloadIndexer("paypal"),
             ("stripe", "openapi"): OpenApiPayloadIndexer("stripe"),
             ("razorpay", "sdk_source"): RazorpaySdkPayloadIndexer(),
         },
