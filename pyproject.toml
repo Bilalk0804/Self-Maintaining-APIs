@@ -22,6 +22,8 @@ dependencies = [
 
 [project.scripts]
 driftwatch = "Driftwatch.Cli:app"
+driftwatch-worker = "Driftwatch.Worker:main"
+driftwatch-poller = "Driftwatch.Poller:main"
 
 [dependency-groups]
 dev = ["pytest>=8.3", "ruff>=0.8"]
