@@ -93,3 +93,14 @@ def create_order(self):
 
     assert result.provider == "paypal"
     assert "api:paypal/op:post_v2_checkout_orders" in result.index.entries
+
+
+def test_python_sdk_indexer_handles_fluent_request_builder() -> None:
+    raw = b"""
+def create_order(self):
+    return RequestBuilder().path('/v2/checkout/orders').http_method(HttpMethodEnum.POST)
+"""
+
+    result = PythonSdkPayloadIndexer("paypal").index(raw, revision="commit")
+
+    assert "api:paypal/op:post_v2_checkout_orders" in result.index.entries

@@ -90,11 +90,14 @@ def _extract_payload(archive: bytes, source_kind: str) -> bytes:
         members = [member for member in bundle.getmembers() if member.isfile()]
         if source_kind == "sdk_source":
             files = sorted(
-                member
-                for member in members
-                if member.name.endswith(".py")
-                and "/test" not in member.name.lower()
-                and "/tests/" not in member.name.lower()
+                [
+                    member
+                    for member in members
+                    if member.name.endswith(".py")
+                    and "/test" not in member.name.lower()
+                    and "/tests/" not in member.name.lower()
+                ],
+                key=lambda member: member.name,
             )
             if not files:
                 raise ValueError("GitHub SDK archive contained no Python source files")

@@ -92,6 +92,11 @@ class PythonSdkPayloadIndexer:
             raise PayloadIndexingError(
                 f"{self.provider} payload is not valid Python source"
             ) from error
+        parents = {
+            child: node
+            for node in ast.walk(tree)
+            for child in ast.iter_child_nodes(node)
+        }
         index = SurfaceIndex(self.provider, revision)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not node.args:
@@ -99,7 +104,7 @@ class PythonSdkPayloadIndexer:
             path = _string_value(node.args[0])
             if path is None or not _API_PATH_RE.match(path):
                 continue
-            method = _method_name(node)
+            method = _method_name(node, parents)
             if method is None:
                 continue
             index.add(
@@ -132,7 +137,7 @@ def _string_value(node: ast.AST) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _method_name(call: ast.Call) -> str | None:
+def _method_name(call: ast.Call, parents: dict[ast.AST, ast.AST]) -> str | None:
     for keyword in call.keywords:
         if keyword.arg in {"method", "http_method"}:
             value = _string_value(keyword.value)
@@ -142,6 +147,33 @@ def _method_name(call: ast.Call) -> str | None:
         value = _string_value(call.args[1])
         if value:
             return value
+    value = call.func.value if isinstance(call.func, ast.Attribute) else None
+    while isinstance(value, ast.Call):
+        if isinstance(value.func, ast.Attribute) and value.func.attr in {
+            "http_method",
+            "method",
+        }:
+            if value.args:
+                method = value.args[0]
+                if isinstance(method, ast.Attribute):
+                    return method.attr
+                literal = _string_value(method)
+                if literal:
+                    return literal
+        value = value.func.value if isinstance(value.func, ast.Attribute) else None
+    current: ast.AST = call
+    while current in parents:
+        current = parents[current]
+        if not isinstance(current, ast.Call) or not isinstance(current.func, ast.Attribute):
+            continue
+        if current.func.attr not in {"http_method", "method"} or not current.args:
+            continue
+        method = current.args[0]
+        if isinstance(method, ast.Attribute):
+            return method.attr
+        literal = _string_value(method)
+        if literal:
+            return literal
     return None
 
 
