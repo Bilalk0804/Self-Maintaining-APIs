@@ -25,6 +25,8 @@ def build_worker(connection: psycopg.Connection[object]) -> SourceIndexWorker:
         SourceSnapshotRepository(connection),
         {
             ("openai", "openapi"): OpenApiPayloadIndexer(),
+            ("paypal", "openapi"): OpenApiPayloadIndexer("paypal"),
+            ("stripe", "openapi"): OpenApiPayloadIndexer("stripe"),
             ("razorpay", "sdk_source"): RazorpaySdkPayloadIndexer(),
         },
         worker_id=_env("DRIFTWATCH_WORKER_ID", _default_worker_id()),

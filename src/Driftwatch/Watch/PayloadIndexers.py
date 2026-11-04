@@ -38,22 +38,32 @@ class PayloadIndexer(Protocol):
 
 
 class OpenApiPayloadIndexer:
-    """Index OpenAPI JSON using the canonical shared OpenAPI indexer."""
+    """Index provider OpenAPI JSON using the canonical shared indexer."""
 
-    provider = "openai"
     source_kind = "openapi"
+
+    def __init__(self, provider: str = "openai") -> None:
+        if not provider.strip():
+            raise ValueError("provider must not be empty")
+        self.provider = provider
 
     def index(self, raw: bytes, *, revision: str) -> IndexedPayload:
         try:
             document = orjson.loads(raw)
         except orjson.JSONDecodeError as error:
-            raise PayloadIndexingError("OpenAI payload is not valid JSON") from error
+            raise PayloadIndexingError(
+                f"{self.provider} payload is not valid JSON"
+            ) from error
         if not isinstance(document, dict) or not document.get("openapi"):
-            raise PayloadIndexingError("OpenAI payload is not an OpenAPI document")
+            raise PayloadIndexingError(
+                f"{self.provider} payload is not an OpenAPI document"
+            )
         try:
             index = build_index(document, self.provider, revision)
         except (TypeError, ValueError, KeyError) as error:
-            raise PayloadIndexingError("OpenAI OpenAPI payload could not be indexed") from error
+            raise PayloadIndexingError(
+                f"{self.provider} OpenAPI payload could not be indexed"
+            ) from error
         return IndexedPayload(self.provider, revision, _sha256(raw), index)
 
 

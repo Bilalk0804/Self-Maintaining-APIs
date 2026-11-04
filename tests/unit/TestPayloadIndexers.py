@@ -35,6 +35,31 @@ def test_openai_indexer_rejects_non_openapi_json() -> None:
         OpenApiPayloadIndexer().index(b'{"items":[]}', revision="test")
 
 
+def test_openapi_indexer_supports_paypal_provider() -> None:
+    raw = orjson.dumps(
+        {
+            "openapi": "3.0.0",
+            "paths": {
+                "/v2/checkout/orders": {
+                    "post": {
+                        "responses": {"201": {"description": "created"}},
+                    }
+                }
+            },
+        }
+    )
+
+    result = OpenApiPayloadIndexer("paypal").index(raw, revision="test")
+
+    assert result.provider == "paypal"
+    assert "api:paypal/op:post_v2_checkout_orders" in result.index.entries
+
+
+def test_openapi_indexer_rejects_empty_provider() -> None:
+    with pytest.raises(ValueError, match="provider"):
+        OpenApiPayloadIndexer(" ")
+
+
 def test_razorpay_source_indexes_only_provable_operations() -> None:
     raw = b"""
 def create_payment(self, payload):
