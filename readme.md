@@ -31,7 +31,7 @@ breaking change costs more trust than ten correct ones earn.
 
 ```bash
 uv sync
-./scripts/fetchFixtures.sh     # stripe-python + three real spec revisions (~60 MB, cached)
+./scripts/fetchFixtures.sh     # Stripe + PayPal SDKs and pinned specs (cached)
 uv run pytest                  # 71 tests
 ```
 

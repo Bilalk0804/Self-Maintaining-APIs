@@ -153,8 +153,13 @@ publisher code.
 
 The dependency-injected application factory is implemented in
 [`src/Driftwatch/Http/Application.py`](../src/Driftwatch/Http/Application.py). It is
-deliberately not a production server entry point yet: deployment configuration, database
-readiness, rate limits, public change-feed routes, and webhook handling remain open.
+The runnable Uvicorn entry point is
+[`src/Driftwatch/Http/Server.py`](../src/Driftwatch/Http/Server.py). It requires
+`DRIFTWATCH_DATABASE_URL`, `DRIFTWATCH_AUTH0_ISSUER`, `DRIFTWATCH_AUTH0_AUDIENCE`, and
+`DRIFTWATCH_WORKSPACE_ROOT`; missing configuration fails startup rather than enabling fake
+authentication. API docs are disabled by default and can be enabled explicitly with
+`DRIFTWATCH_ENABLE_API_DOCS=true`. Deployment configuration, rate limits, public change-feed
+routes, and webhook handling remain open.
 
 ### Boundary
 
