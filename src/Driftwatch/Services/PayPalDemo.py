@@ -12,6 +12,8 @@ from Driftwatch.Services.SourceIngestion import (
     SourcePollingCoordinator,
     SourceSnapshotRepository,
 )
+from Driftwatch.Surfaces import SurfaceDescriptor, SurfaceIndex
+from Driftwatch.Watch.Differ import diff_indexes
 from Driftwatch.Watch.PayloadIndexers import OpenApiPayloadIndexer, PythonSdkPayloadIndexer
 from Driftwatch.Watch.ProviderAdapters import provider_adapter
 
@@ -34,6 +36,7 @@ class PayPalSourceResult:
     snapshot_id: UUID | None
     status: str
     indexed_entries: int
+    change_count: int | None
 
 
 def run_paypal_demo(
@@ -96,9 +99,17 @@ def run_paypal_demo(
                 (source_id,),
             ).fetchone()
             if row is None:
-                results.append(PayPalSourceResult(kind, None, "unchanged", 0))
+                results.append(PayPalSourceResult(kind, None, "unchanged", 0, None))
             else:
-                results.append(PayPalSourceResult(kind, row[0], "unchanged", row[2]))
+                results.append(
+                    PayPalSourceResult(
+                        kind,
+                        row[0],
+                        "unchanged",
+                        row[2],
+                        _change_count(connection, source_id),
+                    )
+                )
             continue
         row = connection.execute(
             """
@@ -110,5 +121,58 @@ def run_paypal_demo(
         ).fetchone()
         if row is None:
             raise RuntimeError(f"PayPal snapshot disappeared: {snapshot_id}")
-        results.append(PayPalSourceResult(kind, snapshot_id, row[0], row[1]))
+        results.append(
+            PayPalSourceResult(
+                kind,
+                snapshot_id,
+                row[0],
+                row[1],
+                _change_count(connection, source_id),
+            )
+        )
     return tuple(results)
+
+
+def _change_count(connection: DemoConnection, source_id: UUID) -> int | None:
+    rows = connection.execute(
+        """
+        SELECT ssi.revision, ssi.entries
+        FROM source_snapshot_index ssi
+        JOIN source_snapshot ss ON ss.id = ssi.snapshot_id
+        WHERE ss.source_id = %s AND ss.index_status = 'built'
+        ORDER BY ss.fetched_at DESC
+        LIMIT 2
+        """,
+        (source_id,),
+    ).fetchall()
+    if len(rows) < 2:
+        return None
+    newer = _surface_index(rows[0][1])
+    older = _surface_index(rows[1][1])
+    return len(diff_indexes(older, newer, include_additive=True))
+
+
+def _surface_index(entries: object) -> SurfaceIndex:
+    if not isinstance(entries, dict):
+        raise RuntimeError("stored source index entries must be an object")
+    provider = "paypal"
+    index = SurfaceIndex(provider, "stored")
+    for ref, raw in entries.items():
+        if not isinstance(ref, str) or not isinstance(raw, dict):
+            raise RuntimeError("stored source index entry is malformed")
+        index.add(
+            ref,
+            SurfaceDescriptor(
+                kind=raw.get("kind"),
+                type_sig=raw.get("type_sig"),
+                required=raw.get("required"),
+                nullable=raw.get("nullable"),
+                default=raw.get("default"),
+                enum_values=tuple(raw["enum_values"]) if raw.get("enum_values") else (),
+                deprecated=raw.get("deprecated", False),
+                sunset_on=raw.get("sunset_on"),
+                doc_hash=raw.get("doc_hash"),
+                source_locator=raw.get("source_locator"),
+            ),
+        )
+    return index

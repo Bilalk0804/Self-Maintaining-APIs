@@ -6,7 +6,7 @@ from Driftwatch.Services.PayPalDemo import PayPalSourceResult
 
 
 def test_paypal_source_result_is_immutable() -> None:
-    result = PayPalSourceResult("sdk_source", uuid4(), "built", 41)
+    result = PayPalSourceResult("sdk_source", uuid4(), "built", 41, None)
 
     assert result.kind == "sdk_source"
     assert result.indexed_entries == 41

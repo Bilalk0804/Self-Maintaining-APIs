@@ -53,8 +53,14 @@ def paypal_demo(
     table.add_column("source")
     table.add_column("status")
     table.add_column("indexed operations", justify="right")
+    table.add_column("detected changes", justify="right")
     for result in results:
-        table.add_row(result.kind, result.status, str(result.indexed_entries))
+        table.add_row(
+            result.kind,
+            result.status,
+            str(result.indexed_entries),
+            "baseline" if result.change_count is None else str(result.change_count),
+        )
     console.print(table)
 
 
