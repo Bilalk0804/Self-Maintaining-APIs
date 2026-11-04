@@ -13,7 +13,7 @@ from Driftwatch.Services.JobQueue import JobQueue
 from Driftwatch.Services.ScheduledPolling import ScheduledPollingWorker
 from Driftwatch.Services.SourceIngestion import SourcePollingCoordinator, SourceSnapshotRepository
 from Driftwatch.Services.WorkerRuntime import WorkerRuntime, WorkerRuntimeConfig
-from Driftwatch.Watch.SourceAdapters import HttpSourceAdapter
+from Driftwatch.Watch.ProviderAdapters import provider_adapter
 
 
 def main() -> None:
@@ -27,7 +27,11 @@ def main() -> None:
     poller = ScheduledPollingWorker(
         connection,
         coordinator,
-        lambda _provider, _kind, url: HttpSourceAdapter(url),
+        lambda provider, kind, url: provider_adapter(
+            provider,
+            kind,
+            source_url=url,
+        ),
         worker_id=worker_id,
         lease_seconds=_env_int("DRIFTWATCH_POLLER_LEASE_SECONDS", 300),
     )

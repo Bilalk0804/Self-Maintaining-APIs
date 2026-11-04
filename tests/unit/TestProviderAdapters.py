@@ -44,6 +44,16 @@ def test_factory_rejects_unconfigured_source_kind() -> None:
         provider_adapter("razorpay", "openapi", client=mock_client())
 
 
+def test_factory_rejects_database_url_drift() -> None:
+    with pytest.raises(ValueError, match="does not match"):
+        provider_adapter(
+            "razorpay",
+            "changelog_html",
+            source_url="https://example.test/not-the-catalog-url",
+            client=mock_client(),
+        )
+
+
 def test_adapter_rejects_source_from_another_provider() -> None:
     source = ProviderSource("openapi", "https://example.test/other", True)
 

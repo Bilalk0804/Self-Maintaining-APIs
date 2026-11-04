@@ -96,6 +96,7 @@ def provider_adapter(
     provider: str,
     source_kind: str,
     *,
+    source_url: str | None = None,
     client: httpx2.Client | None = None,
     max_bytes: int = 10 * 1024 * 1024,
 ) -> ConfiguredProviderAdapter:
@@ -107,6 +108,10 @@ def provider_adapter(
         raise ValueError(
             f"provider {provider!r} has no configured {source_kind!r} source"
         ) from error
+    if source_url is not None and source.url != source_url:
+        raise ValueError(
+            f"database source URL does not match configured {provider} {source_kind} URL"
+        )
     return ConfiguredProviderAdapter(metadata, source, client=client, max_bytes=max_bytes)
 
 
