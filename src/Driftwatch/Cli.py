@@ -40,6 +40,11 @@ def paypal_demo(
         envvar="DRIFTWATCH_DATABASE_URL",
         help="PostgreSQL connection string.",
     ),
+    force_refresh: bool = typer.Option(
+        False,
+        "--force-refresh",
+        help="Clear PayPal watermarks and fetch fresh repository archives.",
+    ),
 ) -> None:
     """Run the real PayPal repository -> snapshot -> index demo."""
     configured_url = database_url or os.getenv("DRIFTWATCH_TEST_DATABASE_URL")
@@ -48,7 +53,7 @@ def paypal_demo(
             "provide --database-url or set DRIFTWATCH_DATABASE_URL"
         )
     with psycopg.connect(configured_url) as connection:
-        results = run_paypal_demo(connection)
+        results = run_paypal_demo(connection, force_refresh=force_refresh)
     table = Table(title="PayPal pipeline demo")
     table.add_column("source")
     table.add_column("status")

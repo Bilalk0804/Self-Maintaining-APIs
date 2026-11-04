@@ -43,6 +43,7 @@ def run_paypal_demo(
     connection: DemoConnection,
     *,
     worker_id: str = "paypal-demo",
+    force_refresh: bool = False,
 ) -> tuple[PayPalSourceResult, ...]:
     """Poll and index all active PayPal ground-truth sources once."""
     rows = connection.execute(
@@ -56,6 +57,26 @@ def run_paypal_demo(
     ).fetchall()
     if not rows:
         raise RuntimeError("no active PayPal ground-truth sources found")
+    if force_refresh:
+        connection.execute(
+            """
+            UPDATE api_source_state
+            SET etag = NULL,
+                last_modified = NULL,
+                content_sha256 = NULL,
+                next_poll_at = NULL,
+                updated_at = now()
+            WHERE source_id IN (
+                SELECT s.id
+                FROM api_source s
+                JOIN api_provider p ON p.id = s.provider_id
+                WHERE p.slug = 'paypal'
+                  AND s.is_active = true
+                  AND s.is_ground_truth = true
+            )
+            """
+        )
+        connection.commit()
 
     queue = JobQueue(connection)
     snapshots = SourceSnapshotRepository(connection)
