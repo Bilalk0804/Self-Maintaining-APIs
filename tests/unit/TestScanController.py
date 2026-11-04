@@ -124,3 +124,18 @@ def test_controller_rejects_git_flag_injection_and_path_traversal() -> None:
         controller(Queue(None)).submit_scan(
             PRINCIPAL, ScanRequest("../../etc/passwd", "stripe", "abc1234")
         )
+
+
+def test_controller_canonicalizes_whitespace_before_queueing() -> None:
+    queue = Queue(None)
+
+    controller(queue).submit_scan(
+        PRINCIPAL,
+        ScanRequest(" repo-1 ", " stripe ", " abc123 ", " manual "),
+    )
+
+    payload = queue.calls[0][0][2]
+    assert payload["repository_id"] == "repo-1"
+    assert payload["provider"] == "stripe"
+    assert payload["commit_sha"] == "abc123"
+    assert payload["trigger"] == "manual"

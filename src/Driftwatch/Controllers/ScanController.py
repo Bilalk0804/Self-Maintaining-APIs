@@ -125,7 +125,7 @@ class ScanController:
         """Validate and enqueue a scan without performing pipeline work in the handler."""
         if not principal.account_id or not principal.account_id.strip():
             raise PermissionError("authenticated account_id is required")
-        self._validate_request(request)
+        request = self._normalized_request(request)
         repository = self._repositories.resolve(principal, request.repository_id)
         if repository.account_id != principal.account_id:
             raise PermissionError("repository is not owned by the authenticated account")
@@ -154,8 +154,8 @@ class ScanController:
         return self._dashboard.upcoming_impact(principal.account_id)
 
     @staticmethod
-    def _validate_request(request: ScanRequest) -> None:
-        """Reject incomplete or malformed requests before they reach the queue."""
+    def _normalized_request(request: ScanRequest) -> ScanRequest:
+        """Validate and canonicalize request fields before authorization and queueing."""
         repo_id = request.repository_id.strip()
         if not repo_id:
             raise ValueError("repository_id must not be empty")
@@ -166,11 +166,16 @@ class ScanController:
             raise ValueError("commit_sha must not be empty")
         if commit_sha.startswith("-") or not _COMMIT_SHA_RE.fullmatch(commit_sha):
             raise ValueError("invalid commit_sha")
-        if not request.trigger.strip():
+        provider = request.provider.strip()
+        if not provider:
+            raise ValueError("provider must not be empty")
+        trigger = request.trigger.strip()
+        if not trigger:
             raise ValueError("trigger must not be empty")
-        if request.trigger not in _ALLOWED_TRIGGERS:
-            raise ValueError(f"unsupported trigger {request.trigger!r}")
-        get_provider(request.provider)
+        if trigger not in _ALLOWED_TRIGGERS:
+            raise ValueError(f"unsupported trigger {trigger!r}")
+        get_provider(provider)
+        return ScanRequest(repo_id, provider, commit_sha, trigger)
 
     @staticmethod
     def _idempotency_key(
