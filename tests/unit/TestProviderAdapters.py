@@ -3,13 +3,13 @@ from __future__ import annotations
 import httpx2
 import pytest
 
-from Driftwatch.Providers import OPENAI, RAZORPAY, ProviderSource
+from Driftwatch.Providers import OPENAI, RAZORPAY, Provider, ProviderSource
 from Driftwatch.Watch.ProviderAdapters import (
+    ConfiguredProviderAdapter,
     OpenAIProviderAdapter,
     RazorpayProviderAdapter,
     provider_adapter,
 )
-from Driftwatch.Watch.SourceAdapters import SourceState
 
 
 def mock_client(payload: bytes = b"source") -> httpx2.Client:
@@ -18,23 +18,18 @@ def mock_client(payload: bytes = b"source") -> httpx2.Client:
     )
 
 
-def test_openai_adapter_polls_configured_source() -> None:
+def test_openai_repository_source_is_rejected_until_repository_adapter_exists() -> None:
     source = OPENAI.sources[0]
-    adapter = OpenAIProviderAdapter(source, client=mock_client(b"openapi"))
 
-    result = adapter.poll(SourceState())
-
-    assert adapter.provider == "openai"
-    assert adapter.source.kind == "openapi"
-    assert result.changed is True
-    assert result.payload == b"openapi"
+    with pytest.raises(ValueError, match="direct payload URL"):
+        OpenAIProviderAdapter(source, client=mock_client(b"openapi"))
 
 
-def test_razorpay_adapter_polls_sdk_source() -> None:
+def test_razorpay_repository_source_is_rejected_until_repository_adapter_exists() -> None:
     source = RAZORPAY.sources[0]
-    adapter = RazorpayProviderAdapter(source, client=mock_client(b"sdk"))
 
-    assert adapter.poll(SourceState()).payload == b"sdk"
+    with pytest.raises(ValueError, match="direct payload URL"):
+        RazorpayProviderAdapter(source, client=mock_client(b"sdk"))
 
 
 def test_factory_selects_source_kind() -> None:
@@ -54,3 +49,23 @@ def test_adapter_rejects_source_from_another_provider() -> None:
 
     with pytest.raises(ValueError, match="not configured"):
         OpenAIProviderAdapter(source, client=mock_client())
+
+
+def test_ground_truth_github_repository_url_fails_before_html_polling() -> None:
+    source = OPENAI.sources[0]
+
+    with pytest.raises(ValueError, match="direct payload URL"):
+        OpenAIProviderAdapter(source, client=mock_client())
+
+
+def test_direct_github_raw_url_is_allowed() -> None:
+    source = ProviderSource(
+        "openapi",
+        "https://raw.githubusercontent.com/openai/openapi/main/openapi.json",
+        True,
+    )
+    provider = Provider("test", "Test", "test", "https://example.test/test", (source,))
+
+    adapter = ConfiguredProviderAdapter(provider, source, client=mock_client())
+
+    assert adapter.provider == "test"

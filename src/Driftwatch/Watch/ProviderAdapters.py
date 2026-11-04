@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Protocol
+from urllib.parse import urlparse
 
 import httpx2
 
@@ -33,6 +34,11 @@ class ConfiguredProviderAdapter:
     ) -> None:
         if source not in provider.sources:
             raise ValueError(f"source is not configured for provider {provider.slug!r}")
+        if source.ground_truth and _is_github_repository_url(source.url):
+            raise ValueError(
+                f"{provider.slug} {source.kind} source must be a direct payload URL; "
+                f"repository URL requires a repository source adapter: {source.url}"
+            )
         self.provider = provider.slug
         self.source = source
         self._source_adapter = HttpSourceAdapter(
@@ -102,3 +108,8 @@ def provider_adapter(
             f"provider {provider!r} has no configured {source_kind!r} source"
         ) from error
     return ConfiguredProviderAdapter(metadata, source, client=client, max_bytes=max_bytes)
+
+
+def _is_github_repository_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.hostname == "github.com" and not parsed.path.startswith("/raw/")
