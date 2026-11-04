@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import httpx2
 
 from Driftwatch.Providers import Provider, ProviderSource, get_provider
+from Driftwatch.Watch.GithubSourceAdapters import GithubRepositorySourceAdapter
 from Driftwatch.Watch.SourceAdapters import HttpSourceAdapter, PollResult, SourceState
 
 
@@ -34,18 +35,17 @@ class ConfiguredProviderAdapter:
     ) -> None:
         if source not in provider.sources:
             raise ValueError(f"source is not configured for provider {provider.slug!r}")
-        if source.ground_truth and _is_github_repository_url(source.url):
-            raise ValueError(
-                f"{provider.slug} {source.kind} source must be a direct payload URL; "
-                f"repository URL requires a repository source adapter: {source.url}"
-            )
         self.provider = provider.slug
         self.source = source
-        self._source_adapter = HttpSourceAdapter(
-            source.url,
-            client=client,
-            max_bytes=max_bytes,
-        )
+        if _is_github_repository_url(source.url):
+            self._source_adapter = GithubRepositorySourceAdapter(
+                source.url,
+                source.kind,
+                client=client,
+                max_bytes=max_bytes,
+            )
+        else:
+            self._source_adapter = HttpSourceAdapter(source.url, client=client, max_bytes=max_bytes)
 
     def poll(self, state: SourceState) -> PollResult:
         """Poll only the configured provider source."""

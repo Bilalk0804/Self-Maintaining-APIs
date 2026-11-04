@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import io
+import tarfile
+
 import httpx2
 import pytest
 
 from Driftwatch.Providers import OPENAI, RAZORPAY, Provider, ProviderSource
+from Driftwatch.Watch.GithubSourceAdapters import GithubRepositorySourceAdapter
 from Driftwatch.Watch.ProviderAdapters import (
     ConfiguredProviderAdapter,
     OpenAIProviderAdapter,
     RazorpayProviderAdapter,
     provider_adapter,
 )
+from Driftwatch.Watch.SourceAdapters import SourceState
 
 
 def mock_client(payload: bytes = b"source") -> httpx2.Client:
@@ -18,19 +23,20 @@ def mock_client(payload: bytes = b"source") -> httpx2.Client:
     )
 
 
-def test_openai_repository_source_is_rejected_until_repository_adapter_exists() -> None:
+def test_openai_repository_source_uses_archive_adapter() -> None:
     source = OPENAI.sources[0]
 
-    with pytest.raises(ValueError, match="direct payload URL"):
-        OpenAIProviderAdapter(source, client=mock_client(b"openapi"))
+    adapter = OpenAIProviderAdapter(source, client=mock_client(b"archive"))
+
+    assert adapter.source == source
 
 
-def test_razorpay_repository_source_is_rejected_until_repository_adapter_exists() -> None:
+def test_razorpay_repository_source_uses_archive_adapter() -> None:
     source = RAZORPAY.sources[0]
 
-    with pytest.raises(ValueError, match="direct payload URL"):
-        RazorpayProviderAdapter(source, client=mock_client(b"sdk"))
+    adapter = RazorpayProviderAdapter(source, client=mock_client(b"archive"))
 
+    assert adapter.source == source
 
 def test_factory_selects_source_kind() -> None:
     adapter = provider_adapter("razorpay", "changelog_html", client=mock_client())
@@ -61,11 +67,12 @@ def test_adapter_rejects_source_from_another_provider() -> None:
         OpenAIProviderAdapter(source, client=mock_client())
 
 
-def test_ground_truth_github_repository_url_fails_before_html_polling() -> None:
+def test_ground_truth_github_repository_url_uses_archive_adapter() -> None:
     source = OPENAI.sources[0]
 
-    with pytest.raises(ValueError, match="direct payload URL"):
-        OpenAIProviderAdapter(source, client=mock_client())
+    adapter = OpenAIProviderAdapter(source, client=mock_client())
+
+    assert adapter.source == source
 
 
 def test_direct_github_raw_url_is_allowed() -> None:
@@ -79,3 +86,52 @@ def test_direct_github_raw_url_is_allowed() -> None:
     adapter = ConfiguredProviderAdapter(provider, source, client=mock_client())
 
     assert adapter.provider == "test"
+
+
+def test_github_sdk_archive_extracts_python_sources() -> None:
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w:gz") as bundle:
+        content = b"def create(self):\n return self.request('/v2/orders', method='POST')\n"
+        info = tarfile.TarInfo("sdk-main/paypalserversdk/orders.py")
+        info.size = len(content)
+        bundle.addfile(info, io.BytesIO(content))
+    client = httpx2.Client(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, content=archive.getvalue()))
+    )
+    adapter = GithubRepositorySourceAdapter(
+        "https://github.com/paypal/PayPal-Python-Server-SDK",
+        "sdk_source",
+        client=client,
+    )
+
+    result = adapter.poll(SourceState())
+
+    assert result.changed is True
+    assert b"/v2/orders" in (result.payload or b"")
+
+
+def test_github_openapi_archive_merges_json_documents() -> None:
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w:gz") as bundle:
+        for path in ("orders.json", "payments.json"):
+            content = (
+                b'{"openapi":"3.0.0","paths":{"/v2/%s":{"get":{"responses":{}}}}}'
+                % path.split(".")[0].encode()
+            )
+            info = tarfile.TarInfo(f"spec-main/openapi/{path}")
+            info.size = len(content)
+            bundle.addfile(info, io.BytesIO(content))
+    client = httpx2.Client(
+        transport=httpx2.MockTransport(lambda _: httpx2.Response(200, content=archive.getvalue()))
+    )
+    adapter = GithubRepositorySourceAdapter(
+        "https://github.com/paypal/paypal-rest-api-specifications",
+        "openapi",
+        client=client,
+    )
+
+    result = adapter.poll(SourceState())
+
+    assert result.changed is True
+    assert b"/v2/orders" in (result.payload or b"")
+    assert b"/v2/payments" in (result.payload or b"")

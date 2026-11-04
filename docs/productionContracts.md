@@ -83,22 +83,24 @@ The fake client returns scripted classifications and scripted failures. Tests MU
 to assert timeout, malformed output, rate limit, and provider-unavailable behavior without
 network access.
 
-## 2. Provider-specific OpenAI and Razorpay adapters
+## 2. Provider-specific source adapters
 
-**Status:** `stubbed`
+**Status:** `implemented for repository and direct-payload sources`
 
-OpenAI and Razorpay polling adapters are implemented in
+Provider polling adapters are implemented in
 [`src/Driftwatch/Watch/ProviderAdapters.py`](../src/Driftwatch/Watch/ProviderAdapters.py).
-They bind provider metadata to the shared conditional HTTP poller and do not yet parse
-provider payloads into surface indexes; source-specific indexing remains the next research
-step for each provider.
+Direct HTTPS payload URLs use conditional HTTP polling. GitHub repository URLs use
+[`src/Driftwatch/Watch/GithubSourceAdapters.py`](../src/Driftwatch/Watch/GithubSourceAdapters.py)
+to download the default-branch archive and extract only indexable source material; repository
+HTML is never treated as a provider payload.
 
-The first indexing slice is implemented in
+Provider-specific indexing is implemented in
 [`src/Driftwatch/Watch/PayloadIndexers.py`](../src/Driftwatch/Watch/PayloadIndexers.py):
-OpenAI OpenAPI JSON is normalized through the canonical indexer, and Razorpay Python source
-emits only statically provable HTTP operations. Raw payload persistence and index status are
-defined in `migrations/003ProviderPayloads.sql`; applying that migration requires the
-provider catalog tables from `docs/dataModel.sql`.
+OpenAPI JSON for OpenAI, PayPal, and Stripe is normalized through the canonical indexer;
+PayPal and Razorpay Python SDK sources emit only statically provable HTTP operations. PayPal
+OpenAPI archive files under `openapi/` are merged by path before indexing. Raw payload
+persistence and index status are defined in `migrations/003ProviderPayloads.sql`; applying
+that migration requires the provider catalog tables from `docs/dataModel.sql`.
 
 Durable persistence and queue processing are implemented in
 [`src/Driftwatch/Services/SourceIngestion.py`](../src/Driftwatch/Services/SourceIngestion.py).
