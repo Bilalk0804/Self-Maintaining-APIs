@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 
+import psycopg
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -14,6 +16,7 @@ from Driftwatch.Fix import Codemods as codemods_mod
 from Driftwatch.Fix.Splice import apply_edits, diff_stats, unified_diff, verify_patch
 from Driftwatch.Mapping.Model import SurfaceMap
 from Driftwatch.Match.Scorer import decide
+from Driftwatch.Services.PayPalDemo import run_paypal_demo
 from Driftwatch.Services.Pipeline import PipelineService
 from Driftwatch.Surfaces import SurfaceDescriptor
 from Driftwatch.Views.Console import ConsoleView
@@ -27,6 +30,32 @@ app = typer.Typer(
 console = Console()
 service = PipelineService()
 view = ConsoleView(console)
+
+
+@app.command("paypal-demo")
+def paypal_demo(
+    database_url: str | None = typer.Option(
+        None,
+        "--database-url",
+        envvar="DRIFTWATCH_DATABASE_URL",
+        help="PostgreSQL connection string.",
+    ),
+) -> None:
+    """Run the real PayPal repository -> snapshot -> index demo."""
+    configured_url = database_url or os.getenv("DRIFTWATCH_TEST_DATABASE_URL")
+    if not configured_url:
+        raise typer.BadParameter(
+            "provide --database-url or set DRIFTWATCH_DATABASE_URL"
+        )
+    with psycopg.connect(configured_url) as connection:
+        results = run_paypal_demo(connection)
+    table = Table(title="PayPal pipeline demo")
+    table.add_column("source")
+    table.add_column("status")
+    table.add_column("indexed operations", justify="right")
+    for result in results:
+        table.add_row(result.kind, result.status, str(result.indexed_entries))
+    console.print(table)
 
 
 @app.command("derive-map")
