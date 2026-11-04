@@ -69,6 +69,22 @@ uv run driftwatch diff-spec --provider paypal \
   --out .cache/paypal_deltas.json
 ```
 
+Run the real durable PayPal source demo against the seeded PostgreSQL catalog:
+
+```bash
+DRIFTWATCH_DATABASE_URL="host=127.0.0.1 dbname=driftwatch_dev user=postgres" \
+  uv run driftwatch paypal-demo
+```
+
+The command polls the PayPal GitHub repositories, persists raw snapshots, enqueues indexing
+jobs, and reports the normalized operation counts for the OpenAPI and SDK sources.
+Add `--force-refresh` when demonstrating a fresh upstream fetch:
+
+```bash
+DRIFTWATCH_DATABASE_URL="host=127.0.0.1 dbname=driftwatch_dev user=postgres" \
+  uv run driftwatch paypal-demo --force-refresh
+```
+
 ## Layout
 
 ```

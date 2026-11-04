@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from typing import Protocol
+from urllib.parse import urlparse
 
 import httpx2
 
 from Driftwatch.Providers import Provider, ProviderSource, get_provider
+from Driftwatch.Watch.GithubSourceAdapters import GithubRepositorySourceAdapter
 from Driftwatch.Watch.SourceAdapters import HttpSourceAdapter, PollResult, SourceState
 
 
@@ -35,11 +37,15 @@ class ConfiguredProviderAdapter:
             raise ValueError(f"source is not configured for provider {provider.slug!r}")
         self.provider = provider.slug
         self.source = source
-        self._source_adapter = HttpSourceAdapter(
-            source.url,
-            client=client,
-            max_bytes=max_bytes,
-        )
+        if _is_github_repository_url(source.url):
+            self._source_adapter = GithubRepositorySourceAdapter(
+                source.url,
+                source.kind,
+                client=client,
+                max_bytes=max_bytes,
+            )
+        else:
+            self._source_adapter = HttpSourceAdapter(source.url, client=client, max_bytes=max_bytes)
 
     def poll(self, state: SourceState) -> PollResult:
         """Poll only the configured provider source."""
@@ -90,6 +96,7 @@ def provider_adapter(
     provider: str,
     source_kind: str,
     *,
+    source_url: str | None = None,
     client: httpx2.Client | None = None,
     max_bytes: int = 10 * 1024 * 1024,
 ) -> ConfiguredProviderAdapter:
@@ -101,4 +108,13 @@ def provider_adapter(
         raise ValueError(
             f"provider {provider!r} has no configured {source_kind!r} source"
         ) from error
+    if source_url is not None and source.url != source_url:
+        raise ValueError(
+            f"database source URL does not match configured {provider} {source_kind} URL"
+        )
     return ConfiguredProviderAdapter(metadata, source, client=client, max_bytes=max_bytes)
+
+
+def _is_github_repository_url(url: str) -> bool:
+    parsed = urlparse(url)
+    return parsed.hostname == "github.com" and not parsed.path.startswith("/raw/")

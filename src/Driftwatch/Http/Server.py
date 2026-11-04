@@ -40,6 +40,7 @@ def build_runtime_app() -> Any:
         ScanController(queue, dashboard, repositories),
         Auth0TokenValidator(issuer, audience),
         readiness_check=readiness_check,
+        shutdown=connection.close,
         enable_api_docs=_env_bool("DRIFTWATCH_ENABLE_API_DOCS", default=False),
     )
 

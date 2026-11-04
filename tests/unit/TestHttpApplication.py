@@ -120,3 +120,14 @@ def test_unready_dependency_returns_service_unavailable() -> None:
     client = TestClient(create_app(Controller(), TokenValidator(), readiness_check=lambda: False))
 
     assert client.get("/readyz").status_code == 503
+
+
+def test_application_closes_resources_during_lifespan() -> None:
+    closed = []
+
+    with TestClient(
+        create_app(Controller(), TokenValidator(), shutdown=lambda: closed.append(True))
+    ):
+        pass
+
+    assert closed == [True]
