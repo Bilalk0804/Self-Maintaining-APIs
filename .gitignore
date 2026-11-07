@@ -8,5 +8,3 @@ deltas.json
 findings.json
 surface_map.json
 patch.diff
-dotnet/**/bin/
-dotnet/**/obj/

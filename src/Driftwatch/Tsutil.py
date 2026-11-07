@@ -13,7 +13,7 @@ import tree_sitter_python
 import tree_sitter_typescript
 from tree_sitter import Language, Node, Parser, Query, QueryCursor, Tree
 
-Lang = Literal["python", "typescript"]
+Lang = Literal["python", "typescript", "tsx"]
 
 
 @lru_cache(maxsize=4)
@@ -24,6 +24,8 @@ def language(lang: Lang) -> Language:
             return Language(tree_sitter_python.language())
         case "typescript":
             return Language(tree_sitter_typescript.language_typescript())
+        case "tsx":
+            return Language(tree_sitter_typescript.language_tsx())
     raise ValueError(f"unsupported language: {lang!r}")
 
 

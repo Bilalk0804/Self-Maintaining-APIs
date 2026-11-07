@@ -14,6 +14,7 @@ from rich.table import Table
 
 from Driftwatch.Fix import Codemods as codemods_mod
 from Driftwatch.Fix.Splice import apply_edits, diff_stats, unified_diff, verify_patch
+from Driftwatch.Http.ReviewApp import serve_review
 from Driftwatch.Mapping.Model import SurfaceMap
 from Driftwatch.Match.Scorer import decide
 from Driftwatch.Services.PayPalDemo import run_paypal_demo
@@ -49,9 +50,7 @@ def paypal_demo(
     """Run the real PayPal repository -> snapshot -> index demo."""
     configured_url = database_url or os.getenv("DRIFTWATCH_TEST_DATABASE_URL")
     if not configured_url:
-        raise typer.BadParameter(
-            "provide --database-url or set DRIFTWATCH_DATABASE_URL"
-        )
+        raise typer.BadParameter("provide --database-url or set DRIFTWATCH_DATABASE_URL")
     with psycopg.connect(configured_url) as connection:
         results = run_paypal_demo(connection, force_refresh=force_refresh)
     table = Table(title="PayPal pipeline demo")
@@ -185,6 +184,28 @@ def scan(
     ]
     out.write_text(json.dumps(payload, indent=1), encoding="utf-8")
     console.print(f"written to [bold]{out}[/] ({len(payload)} findings)")
+
+
+@app.command("review")
+def review(
+    root: Path = typer.Option(
+        Path(".cache/reviews"),
+        help="Directory of one findings JSON per repository.",
+    ),
+    host: str = typer.Option("127.0.0.1", help="Loopback address to bind."),
+    port: int = typer.Option(8765, min=1, max=65535),
+    database_url: str | None = typer.Option(
+        None,
+        "--database-url",
+        envvar="DRIFTWATCH_DATABASE_URL",
+        help="Postgres URL. When set, the page searches provider sources on their schedule.",
+    ),
+) -> None:
+    """Open the desk and search provider sources without further input."""
+    try:
+        serve_review(root, host=host, port=port, database_url=database_url)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @app.command("fix")

@@ -5,10 +5,9 @@ completed production behavior.
 
 ## Implementation language decision
 
-Provider-specific ingestion, validation, parsing, and indexing will remain inside the
-existing Python application. A separate .NET service is not part of the current
-architecture. Any future implementation must use the existing Python domain contracts,
-PostgreSQL persistence, queue services, and fake GCP/gcloud boundaries.
+Provider-specific ingestion, validation, parsing, and indexing stay inside the
+existing Python application. Any future implementation must use the existing Python
+domain contracts, PostgreSQL persistence, queue services, and fake GCP/gcloud boundaries.
 
 ## Provider source adapters
 

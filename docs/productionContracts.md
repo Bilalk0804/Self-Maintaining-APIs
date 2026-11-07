@@ -13,8 +13,7 @@ usable with deterministic in-memory or local emulators first, and no implementat
 require a real GCP project, paid API, or production credential during tests.
 
 The backend implementation language is Python. Provider-specific ingestion, parsing, and
-indexing will extend the existing Python ports-and-adapters boundaries rather than
-introducing a separate .NET service.
+indexing extend the existing Python ports-and-adapters boundaries.
 
 ## Contract status
 

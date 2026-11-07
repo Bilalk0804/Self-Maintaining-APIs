@@ -19,8 +19,13 @@ from Driftwatch.Watch.PayloadIndexers import (
 )
 
 
-def build_worker(connection: psycopg.Connection[object]) -> SourceIndexWorker:
+def build_worker(
+    connection: psycopg.Connection[object],
+    *,
+    worker_id: str | None = None,
+) -> SourceIndexWorker:
     """Build the source index worker with all currently supported indexers."""
+    resolved_id = worker_id or _env("DRIFTWATCH_WORKER_ID", _default_worker_id())
     return SourceIndexWorker(
         JobQueue(connection),
         SourceSnapshotRepository(connection),
@@ -31,7 +36,7 @@ def build_worker(connection: psycopg.Connection[object]) -> SourceIndexWorker:
             ("stripe", "openapi"): OpenApiPayloadIndexer("stripe"),
             ("razorpay", "sdk_source"): RazorpaySdkPayloadIndexer(),
         },
-        worker_id=_env("DRIFTWATCH_WORKER_ID", _default_worker_id()),
+        worker_id=resolved_id,
     )
 
 
