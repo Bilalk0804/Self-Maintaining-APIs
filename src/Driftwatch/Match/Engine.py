@@ -8,11 +8,13 @@ from pathlib import Path
 from Driftwatch.Mapping.Model import SurfaceMap
 from Driftwatch.Match import Candidates as candidates
 from Driftwatch.Match import Prefilter as prefilter
-from Driftwatch.Match.Resolver import resolve_file
+from Driftwatch.Match.Resolver import Usage, resolve_file
 from Driftwatch.Match.Scorer import Finding, score
 from Driftwatch.Match.TypescriptResolver import resolve_file as resolve_typescript_file
 from Driftwatch.Surfaces import SurfaceRef
 from Driftwatch.Watch.Differ import Delta
+
+_SCRIPT_SUFFIXES = frozenset({".js", ".jsx", ".mjs", ".ts", ".tsx"})
 
 
 @dataclass(slots=True)
@@ -75,19 +77,10 @@ def scan_repo(repo_root: Path, deltas: list[Delta], smap: SurfaceMap) -> ScanRes
 
     seen: set[str] = set()
     for path in candidate_files:
-        if path.suffix != ".py":
-            continue
-        try:
-            src = path.read_bytes()
-        except OSError:
+        usages = _usages_for(path, repo_root, smap, literal_map)
+        if usages is None:
             continue
         result.files_parsed += 1
-        rel = path.relative_to(repo_root).as_posix()
-        resolver = resolve_file if path.suffix == ".py" else resolve_typescript_file
-        if path.suffix == ".py":
-            usages = resolver(src, rel, smap, literal_probes=literal_map)
-        else:
-            usages = resolver(src, rel, smap)
         for usage in usages:
             for delta in _relevant_deltas(usage.surface_ref, deltas_by_surface):
                 finding = score(usage, delta, surface_map_confidence=0.95)
@@ -98,6 +91,25 @@ def scan_repo(repo_root: Path, deltas: list[Delta], smap: SurfaceMap) -> ScanRes
 
     result.findings.sort(key=lambda f: (-f.confidence, f.usage.file_path, f.usage.start_line))
     return result
+
+
+def _usages_for(
+    path: Path,
+    repo_root: Path,
+    smap: SurfaceMap,
+    literal_map: dict[str, str],
+) -> list[Usage] | None:
+    """Parse one candidate file, or return ``None`` when this scan cannot read it."""
+    if path.suffix != ".py" and path.suffix not in _SCRIPT_SUFFIXES:
+        return None
+    try:
+        src = path.read_bytes()
+    except OSError:
+        return None
+    rel = path.relative_to(repo_root).as_posix()
+    if path.suffix == ".py":
+        return resolve_file(src, rel, smap, literal_probes=literal_map)
+    return resolve_typescript_file(src, rel, smap)
 
 
 def _relevant_deltas(usage_ref: str, by_surface: dict[str, list[Delta]]) -> list[Delta]:
