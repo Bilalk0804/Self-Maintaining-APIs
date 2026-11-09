@@ -8,11 +8,13 @@ from pathlib import Path
 from Driftwatch.Mapping.Model import SurfaceMap
 from Driftwatch.Match import Candidates as candidates
 from Driftwatch.Match import Prefilter as prefilter
-from Driftwatch.Match.Resolver import resolve_file
+from Driftwatch.Match.Resolver import Usage, resolve_file
 from Driftwatch.Match.Scorer import Finding, score
 from Driftwatch.Match.TypescriptResolver import resolve_file as resolve_typescript_file
 from Driftwatch.Surfaces import SurfaceRef
 from Driftwatch.Watch.Differ import Delta
+
+_SCRIPT_SUFFIXES = frozenset({".js", ".jsx", ".mjs", ".ts", ".tsx"})
 
 
 @dataclass(slots=True)
@@ -64,6 +66,7 @@ def scan_repo(repo_root: Path, deltas: list[Delta], smap: SurfaceMap) -> ScanRes
         probes.extend(delta.code_probes())
     literal_probes = _literal_probes(deltas)
     probes.extend(literal_probes)
+    probes.extend(sdk_call_probes(smap))
 
     candidate_files = candidates.find_candidates(repo_root, probes)
     result.files_considered = len(candidate_files)
@@ -75,19 +78,10 @@ def scan_repo(repo_root: Path, deltas: list[Delta], smap: SurfaceMap) -> ScanRes
 
     seen: set[str] = set()
     for path in candidate_files:
-        if path.suffix != ".py":
-            continue
-        try:
-            src = path.read_bytes()
-        except OSError:
+        usages = _usages_for(path, repo_root, smap, literal_map)
+        if usages is None:
             continue
         result.files_parsed += 1
-        rel = path.relative_to(repo_root).as_posix()
-        resolver = resolve_file if path.suffix == ".py" else resolve_typescript_file
-        if path.suffix == ".py":
-            usages = resolver(src, rel, smap, literal_probes=literal_map)
-        else:
-            usages = resolver(src, rel, smap)
         for usage in usages:
             for delta in _relevant_deltas(usage.surface_ref, deltas_by_surface):
                 finding = score(usage, delta, surface_map_confidence=0.95)
@@ -98,6 +92,66 @@ def scan_repo(repo_root: Path, deltas: list[Delta], smap: SurfaceMap) -> ScanRes
 
     result.findings.sort(key=lambda f: (-f.confidence, f.usage.file_path, f.usage.start_line))
     return result
+
+
+def sdk_call_probes(smap: SurfaceMap) -> list[str]:
+    """Return dotted SDK call spellings worth grepping for.
+
+    A change's own probes are parameter names and URL paths. A file that only
+    calls ``stripe.paymentIntents.create`` contains neither, so it is never
+    opened. The Python spelling (``payment_intents.create``) and the Node
+    spelling (``paymentIntents.create``) are both included. This pass is
+    broader than the change probes: any file that mentions an SDK call is parsed.
+
+    Args:
+        smap: Surface map whose symbol tails become the probes.
+
+    Returns:
+        Sorted, de-duplicated probe strings of at least three characters.
+    """
+    prefix = f"{smap.sdk_package}."
+    probes: set[str] = set()
+    for entry in smap.entries:
+        body = entry.symbol_ref.split(":", 1)[-1]
+        if not body.startswith(prefix):
+            continue
+        tail = body[len(prefix) :]
+        if tail.startswith(("v1.", "v2.")):
+            tail = tail.split(".", 1)[1]
+        if tail.endswith("_async"):
+            tail = tail[: -len("_async")]
+        if "." not in tail:
+            continue
+        probes.add(tail)
+        camel = ".".join(_camel(part) for part in tail.split("."))
+        if camel != tail:
+            probes.add(camel)
+    return sorted(probe for probe in probes if len(probe) >= 3)
+
+
+def _camel(name: str) -> str:
+    """Convert one snake_case identifier to camelCase."""
+    head, *rest = name.split("_")
+    return head + "".join(part[:1].upper() + part[1:] for part in rest if part)
+
+
+def _usages_for(
+    path: Path,
+    repo_root: Path,
+    smap: SurfaceMap,
+    literal_map: dict[str, str],
+) -> list[Usage] | None:
+    """Parse one candidate file, or return ``None`` when this scan cannot read it."""
+    if path.suffix != ".py" and path.suffix not in _SCRIPT_SUFFIXES:
+        return None
+    try:
+        src = path.read_bytes()
+    except OSError:
+        return None
+    rel = path.relative_to(repo_root).as_posix()
+    if path.suffix == ".py":
+        return resolve_file(src, rel, smap, literal_probes=literal_map)
+    return resolve_typescript_file(src, rel, smap)
 
 
 def _relevant_deltas(usage_ref: str, by_surface: dict[str, list[Delta]]) -> list[Delta]:

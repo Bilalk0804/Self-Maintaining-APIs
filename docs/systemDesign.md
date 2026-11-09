@@ -168,10 +168,17 @@ treated as already compromised.
 
 ```python
 class SourceAdapter(Protocol):
-    kind: Literal["openapi", "graphql_sdl", "sdk_source", "changelog_html",
-                  "changelog_rss", "deprecation_table"]
+    kind: Literal[
+        "openapi",
+        "graphql_sdl",
+        "sdk_source",
+        "changelog_html",
+        "changelog_rss",
+        "deprecation_table",
+    ]
+
     def poll(self, state: SourceState) -> PollResult: ...
-    def index(self, raw: bytes) -> SurfaceIndex: ...   # only for ground-truth kinds
+    def index(self, raw: bytes) -> SurfaceIndex: ...  # only for ground-truth kinds
 ```
 
 Per-provider configuration, reflecting what each one actually publishes:
@@ -225,16 +232,16 @@ A **`SurfaceDescriptor`** is the semantic payload compared across versions:
 ```python
 @dataclass(frozen=True)
 class SurfaceDescriptor:
-    kind: str                  # operation | param | field | enum_value | model | event
-    type_sig: str | None       # normalized, $ref/allOf resolved
+    kind: str  # operation | param | field | enum_value | model | event
+    type_sig: str | None  # normalized, $ref/allOf resolved
     required: bool | None
     nullable: bool | None
-    default: Json | None       # ← the silent-change detector
+    default: Json | None  # ← the silent-change detector
     enum_values: tuple[str, ...] | None
     deprecated: bool
-    sunset_at: date | None     # Sunset/Deprecation headers, x-* extensions
-    doc_hash: str              # description changed but shape didn't
-    source_locator: str        # JSON pointer / file:line, for evidence citation
+    sunset_at: date | None  # Sunset/Deprecation headers, x-* extensions
+    doc_hash: str  # description changed but shape didn't
+    source_locator: str  # JSON pointer / file:line, for evidence citation
 ```
 
 Building it requires resolving `$ref`, flattening `allOf`, normalizing `oneOf`/`anyOf`
@@ -300,10 +307,10 @@ A `SurfaceMapEntry` binds the two with provenance:
 ```python
 @dataclass
 class SurfaceMapEntry:
-    surface_ref: str          # api:stripe/op:post_v1_charges
-    symbol_ref: str           # py:stripe.ChargeService.create
-    sdk_package: str          # "stripe"
-    sdk_version_range: str    # ">=8.0,<13.0"
+    surface_ref: str  # api:stripe/op:post_v1_charges
+    symbol_ref: str  # py:stripe.ChargeService.create
+    sdk_package: str  # "stripe"
+    sdk_version_range: str  # ">=8.0,<13.0"
     provenance: Literal["sdk_source_derived", "llm_proposed", "human_curated"]
     confidence: float
     reviewed_by: str | None
@@ -365,6 +372,7 @@ Resolution walk, by example. Given:
 
 ```python
 import stripe as pay
+
 client = pay.StripeClient(api_key)
 charge = client.charges.create(amount=1000, source=tok)
 print(charge.source)
@@ -423,7 +431,9 @@ plus **byte-range splices** — never an AST round-trip:
 class Codemod(Protocol):
     change_types: frozenset[str]
     languages: frozenset[str]
+
     def plan(self, finding: Finding, tree: Tree, src: bytes) -> list[Edit]: ...
+
 
 @dataclass(frozen=True)
 class Edit:

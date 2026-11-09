@@ -8,16 +8,13 @@ specific parsing explicit while preserving the shared SurfaceMap contract.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
 from Driftwatch.Mapping.Model import PROVENANCE_CONFIDENCE, SurfaceMap, SurfaceMapEntry
 from Driftwatch.Surfaces import op_ref
 
-_METHOD_RE = re.compile(
-    r"(?ms)^[ \t]*def[ \t]+(?P<name>[a-zA-Z_]\w*)[ \t]*\((?P<params>[^\n]*?)\)[ \t]*(?:->[^\n:]+)?:"
-    r"(?P<body>.*?)(?=^[ \t]*def[ \t]|\Z)"
-)
 _PATH_RE = re.compile(r'\.path\(\s*["\'](?P<path>/[^"\']+)["\']\s*\)')
 _VERB_RE = re.compile(r"\.http_method\(\s*HttpMethodEnum\.(?P<verb>[A-Z]+)\s*\)")
 _OPTION_RE = re.compile(r"options\.get\(\s*[\"'](?P<name>[^\"']+)[\"']")
@@ -38,11 +35,12 @@ def derive_paypal_python(
     result = SurfaceMap(
         provider=provider,
         language="python",
-        sdk_package="paypal-server-sdk",
+        sdk_package="paypalserversdk",
         sdk_version=sdk_version,
     )
     confidence = PROVENANCE_CONFIDENCE["sdk_source_derived"]
     seen: set[tuple[str, str]] = set()
+    client_accessors = _client_accessors(package)
 
     resolved_root = sdk_root.resolve()
     for path in sorted(package.glob("controllers/*_controller.py")):
@@ -54,37 +52,89 @@ def derive_paypal_python(
         if resolved_path.stat().st_size > 5 * 1024 * 1024:
             continue
         source = resolved_path.read_text(encoding="utf-8")
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            continue
+        lines = source.splitlines(keepends=True)
         module = f"paypalserversdk.controllers.{path.stem}"
-        class_name = _controller_name(path.stem)
-        for match in _METHOD_RE.finditer(source):
-            body = match.group("body")
-            path_match = _PATH_RE.search(body)
-            verb_match = _VERB_RE.search(body)
-            if path_match is None or verb_match is None:
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
                 continue
-            surface = op_ref(provider, verb_match.group("verb"), path_match.group("path"))
-            symbol = f"py:{module}.{class_name}.{match.group('name')}"
-            if (surface, symbol) not in seen:
-                result.add(
-                    SurfaceMapEntry(
-                        surface_ref=surface,
-                        symbol_ref=symbol,
-                        confidence=confidence,
-                        source_locator=(
-                            f"{path}:{source[:match.start()].count(chr(10)) + 1}"
-                        ),
+            class_name = node.name
+            accessor = client_accessors.get(class_name, _accessor_name(path.stem))
+            for item in node.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                end_line = item.end_lineno or item.lineno
+                body = "".join(lines[item.lineno - 1 : end_line])
+                path_match = _PATH_RE.search(body)
+                verb_match = _VERB_RE.search(body)
+                if path_match is None or verb_match is None:
+                    continue
+                surface = op_ref(provider, verb_match.group("verb"), path_match.group("path"))
+                locator = f"{path}:{item.lineno}"
+                for symbol in _symbols_for(module, class_name, accessor, item.name):
+                    if (surface, symbol) in seen:
+                        continue
+                    result.add(
+                        SurfaceMapEntry(
+                            surface_ref=surface,
+                            symbol_ref=symbol,
+                            confidence=confidence,
+                            source_locator=locator,
+                        )
                     )
-                )
-                seen.add((surface, symbol))
+                    seen.add((surface, symbol))
 
-            params = result.op_params.setdefault(surface, [])
-            for name in _OPTION_RE.findall(body):
-                if name not in params:
-                    params.append(name)
+                params = result.op_params.setdefault(surface, [])
+                for name in _OPTION_RE.findall(body):
+                    if name not in params:
+                        params.append(name)
 
     return result
 
 
-def _controller_name(stem: str) -> str:
-    """Turn ``orders_controller`` into ``OrdersController``."""
-    return "".join(part.capitalize() for part in stem.split("_"))
+def _symbols_for(
+    module: str,
+    class_name: str,
+    accessor: str,
+    method_name: str,
+) -> tuple[str, ...]:
+    """Return both controller-qualified and client-accessor symbols for a method."""
+    symbols = [f"py:{module}.{class_name}.{method_name}"]
+    if accessor:
+        symbols.append(f"py:paypalserversdk.{accessor}.{method_name}")
+    return tuple(symbols)
+
+
+def _accessor_name(stem: str) -> str:
+    """Turn ``orders_controller`` into ``orders``."""
+    return stem.removesuffix("_controller")
+
+
+def _client_accessors(package: Path) -> dict[str, str]:
+    """Discover controller property names on ``PaypalServersdkClient`` when present."""
+    client_file = package / "paypal_serversdk_client.py"
+    if not client_file.is_file():
+        return {}
+    try:
+        tree = ast.parse(client_file.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return {}
+    out: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for item in node.body:
+            if not isinstance(item, ast.FunctionDef):
+                continue
+            for stmt in ast.walk(item):
+                if (
+                    isinstance(stmt, ast.Return)
+                    and isinstance(stmt.value, ast.Call)
+                    and isinstance(stmt.value.func, ast.Name)
+                    and stmt.value.func.id.endswith("Controller")
+                ):
+                    out[stmt.value.func.id] = item.name
+    return out

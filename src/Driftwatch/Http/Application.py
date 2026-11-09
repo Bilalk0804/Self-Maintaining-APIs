@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Protocol
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -16,6 +16,7 @@ from Driftwatch.Controllers.Auth import (
     AuthenticationError,
 )
 from Driftwatch.Controllers.ScanController import ScanController, ScanRequest
+from Driftwatch.Services.PayPalCheckout import CapturedPayment, CheckoutOrder, PayPalCheckoutError
 
 
 class ScanBody(BaseModel):
@@ -35,6 +36,36 @@ class ScanAccepted(BaseModel):
     job_id: str | None
     status: str
     idempotency_key: str
+
+
+class CheckoutResponse(BaseModel):
+    """Sandbox order for the fixed Driftwatch workspace plan."""
+
+    order_id: str
+    approve_url: str
+    plan: str
+    amount: str
+    currency: str
+
+
+class CaptureResponse(BaseModel):
+    """Sandbox capture of an approved workspace order."""
+
+    order_id: str
+    capture_id: str
+    status: str
+    amount: str
+    currency: str
+
+
+class CheckoutService(Protocol):
+    """Create and capture the sandbox workspace plan."""
+
+    def create_order(self) -> CheckoutOrder:
+        """Create a sandbox order."""
+
+    def capture(self, order_id: str) -> CapturedPayment:
+        """Capture an approved sandbox order."""
 
 
 class ImpactResponse(BaseModel):
@@ -61,6 +92,7 @@ def create_app(
     readiness_check: Callable[[], bool] | None = None,
     shutdown: Callable[[], None] | None = None,
     enable_api_docs: bool = True,
+    checkout: CheckoutService | None = None,
 ) -> FastAPI:
     """Build a dependency-injected application suitable for fake GCP/gcloud tests."""
 
@@ -95,9 +127,7 @@ def create_app(
             ) from error
 
     @app.exception_handler(PermissionError)
-    async def permission_error_handler(
-        request: Request, error: PermissionError
-    ) -> JSONResponse:
+    async def permission_error_handler(request: Request, error: PermissionError) -> JSONResponse:
         return _json_error(status.HTTP_403_FORBIDDEN, "forbidden")
 
     @app.exception_handler(ValueError)
@@ -140,6 +170,52 @@ def create_app(
             job_id=None if response.job_id is None else str(response.job_id),
             status=response.status,
             idempotency_key=response.idempotency_key,
+        )
+
+    @app.post("/v1/billing/checkout", response_model=CheckoutResponse)
+    async def create_checkout() -> CheckoutResponse:
+        """Create a PayPal sandbox order for the monthly workspace plan."""
+        if checkout is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PayPal sandbox is not configured",
+            )
+        try:
+            order = checkout.create_order()
+        except PayPalCheckoutError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(error),
+            ) from error
+        return CheckoutResponse(
+            order_id=order.order_id,
+            approve_url=order.approve_url,
+            plan=order.plan,
+            amount=order.amount,
+            currency=order.currency,
+        )
+
+    @app.post("/v1/billing/orders/{order_id}/capture", response_model=CaptureResponse)
+    async def capture_checkout(order_id: str) -> CaptureResponse:
+        """Capture an approved PayPal sandbox order."""
+        if checkout is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PayPal sandbox is not configured",
+            )
+        try:
+            payment = checkout.capture(order_id)
+        except PayPalCheckoutError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=str(error),
+            ) from error
+        return CaptureResponse(
+            order_id=payment.order_id,
+            capture_id=payment.capture_id,
+            status=payment.status,
+            amount=payment.amount,
+            currency=payment.currency,
         )
 
     @app.get("/v1/dashboard/impact", response_model=list[ImpactResponse])

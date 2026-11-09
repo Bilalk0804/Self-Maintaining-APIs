@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Driftwatch review</title>
+    <link rel="stylesheet" href="https://fonts.bunny.net/css?family=newsreader:500,600|figtree:400,500,600|ibm-plex-mono:400">
+    <link rel="stylesheet" href="/assets/styles.css">
+  </head>
+  <body>
+    <header class="top">
+      <div>
+        <p class="mark">Driftwatch</p>
+        <h1>Review desk</h1>
+      </div>
+      <p id="summary" class="summary" aria-live="polite">Loading scans.</p>
+    </header>
+    <section id="watch" class="watch" aria-label="Provider search">
+      <h2>Provider search</h2>
+      <p id="watch-status" class="watch-status" aria-live="polite">Connecting to the backend.</p>
+      <div id="watch-list"></div>
+    </section>
+    <form id="filters" class="filters">
+      <label>
+        Search
+        <input id="search" name="q" type="search" placeholder="repo, file, or change" autocomplete="off">
+      </label>
+      <label>
+        Severity
+        <select id="severity" name="severity">
+          <option value="all">All</option>
+          <option value="breaking">Breaking</option>
+          <option value="deadline">Deadline</option>
+          <option value="behavioral">Behavioral</option>
+          <option value="deprecating">Deprecating</option>
+          <option value="additive">Additive</option>
+        </select>
+      </label>
+      <label>
+        Label
+        <select id="label" name="label">
+          <option value="all">All</option>
+          <option value="unlabeled">Unlabeled</option>
+          <option value="true">True hit</option>
+          <option value="false">False hit</option>
+          <option value="unsure">Unsure</option>
+        </select>
+      </label>
+      <button id="reload" type="button">Reload scans</button>
+    </form>
+    <p id="banner" class="banner" hidden></p>
+    <main class="desk">
+      <section class="list-wrap" aria-label="Findings">
+        <div id="list"></div>
+      </section>
+      <section id="detail" class="detail" aria-label="Selected finding"></section>
+    </main>
+    <script type="module" src="/assets/js/main.js"></script>
+  </body>
+</html>
