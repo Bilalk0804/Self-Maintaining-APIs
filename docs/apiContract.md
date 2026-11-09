@@ -99,9 +99,7 @@ The first HTTP-facing controller is intentionally framework-neutral:
 
 ```python
 class ScanController:
-    def submit_scan(
-        self, principal: AuthenticatedPrincipal, request: ScanRequest
-    ) -> ScanResponse:
+    def submit_scan(self, principal: AuthenticatedPrincipal, request: ScanRequest) -> ScanResponse:
         """Authorize the repository and enqueue work; do not run the scan inline."""
 
     def dashboard(self, principal: AuthenticatedPrincipal) -> list[ImpactSummary]:
@@ -127,8 +125,9 @@ The single function that decides what we are allowed to do. Pure, table-driven, 
 exhaustively unit-tested — it is the component that protects user trust.
 
 ```python
-def decide(finding: Finding, change: ChangeRecord, patch: Patch | None,
-           setting: RepoSetting) -> GateDecision:
+def decide(
+    finding: Finding, change: ChangeRecord, patch: Patch | None, setting: RepoSetting
+) -> GateDecision:
     """Map (confidence, change type, patch provenance, test result) to an action.
 
     Never returns a stronger action than `setting.action_mode` permits.
@@ -155,31 +154,37 @@ detected*; the model's job is interpretation, not discovery.
 ```python
 class MigrationRecipeOut(BaseModel):
     kind: Literal[
-        "rename_param", "rename_response_field", "replace_model_id",
-        "replace_enum_value", "operation_moved", "insert_required_param",
+        "rename_param",
+        "rename_response_field",
+        "replace_model_id",
+        "replace_enum_value",
+        "operation_moved",
+        "insert_required_param",
         "manual_only",
     ]
-    params: dict[str, Json]      # {"from": "source", "to": "payment_method"}
+    params: dict[str, Json]  # {"from": "source", "to": "payment_method"}
     language: Literal["python", "typescript"] | None = None
     confidence: float = Field(ge=0.0, le=1.0)
     notes: str | None = None
 
+
 class EvidenceCitation(BaseModel):
     kind: Literal["raw_delta", "document_span"]
-    ref: str                      # raw_delta fingerprint or document url
-    quote: str = Field(min_length=8)   # must appear verbatim in the input
+    ref: str  # raw_delta fingerprint or document url
+    quote: str = Field(min_length=8)  # must appear verbatim in the input
+
 
 class ChangeRecordOut(BaseModel):
-    change_type: ChangeType       # the closed enum from dataModel.sql
+    change_type: ChangeType  # the closed enum from dataModel.sql
     severity: Literal["breaking", "behavioral", "deprecating", "deadline", "additive"]
     surface_refs: list[str] = Field(min_length=1)
     title: str = Field(max_length=120)
-    summary: str                  # 2-4 sentences, plain language, no marketing
+    summary: str  # 2-4 sentences, plain language, no marketing
     announced_on: date | None = None
     effective_on: date | None = None
     deadline_on: date | None = None
     enforcement: Literal["hard", "soft", "unknown"] = "unknown"
-    code_probes: list[str] = Field(min_length=1)   # literal strings to ripgrep
+    code_probes: list[str] = Field(min_length=1)  # literal strings to ripgrep
     recipes: list[MigrationRecipeOut] = []
     evidence: list[EvidenceCitation] = Field(min_length=1)
 ```
@@ -210,10 +215,11 @@ class ProposedEdit(BaseModel):
     replacement: str
     rationale: str
 
+
 class FixOut(BaseModel):
     edits: list[ProposedEdit] = Field(min_length=1, max_length=20)
     confidence: float = Field(ge=0.0, le=1.0)
-    unresolved: list[str] = []   # what it could NOT fix; surfaced in the PR body
+    unresolved: list[str] = []  # what it could NOT fix; surfaced in the PR body
 ```
 
 The model returns edits, never a rewritten file. A full-file rewrite cannot be reviewed and

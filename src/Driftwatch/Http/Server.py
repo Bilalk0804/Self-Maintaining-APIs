@@ -16,6 +16,7 @@ from Driftwatch.Controllers.ScanController import (
 from Driftwatch.Http.Application import create_app
 from Driftwatch.Services.Growth import DashboardService
 from Driftwatch.Services.JobQueue import JobQueue
+from Driftwatch.Services.PayPalCheckout import PayPalCheckout, PayPalCheckoutConfig
 
 
 def build_runtime_app() -> Any:
@@ -42,7 +43,20 @@ def build_runtime_app() -> Any:
         readiness_check=readiness_check,
         shutdown=connection.close,
         enable_api_docs=_env_bool("DRIFTWATCH_ENABLE_API_DOCS", default=False),
+        checkout=_paypal_checkout(),
     )
+
+
+def _paypal_checkout() -> PayPalCheckout | None:
+    client_id = os.getenv("PAYPAL_SANDBOX_CLIENT_ID", "").strip()
+    client_secret = os.getenv("PAYPAL_SANDBOX_CLIENT_SECRET", "").strip()
+    if not client_id and not client_secret:
+        return None
+    if not client_id or not client_secret:
+        raise RuntimeError(
+            "PAYPAL_SANDBOX_CLIENT_ID and PAYPAL_SANDBOX_CLIENT_SECRET must both be set"
+        )
+    return PayPalCheckout(PayPalCheckoutConfig(client_id, client_secret))
 
 
 def _required_env(name: str) -> str:
