@@ -17,7 +17,13 @@ from Driftwatch.Fix.Splice import apply_edits, diff_stats, unified_diff, verify_
 from Driftwatch.Http.ReviewApp import serve_review
 from Driftwatch.Mapping.Model import SurfaceMap
 from Driftwatch.Match.Scorer import decide
+from Driftwatch.Services.PayPalCheckout import (
+    PayPalCheckout,
+    PayPalCheckoutConfig,
+    PayPalCheckoutError,
+)
 from Driftwatch.Services.PayPalDemo import run_paypal_demo
+from Driftwatch.Services.PayPalShowcase import PayPalShowcaseReport, run_paypal_showcase
 from Driftwatch.Services.Pipeline import PipelineService
 from Driftwatch.Surfaces import SurfaceDescriptor
 from Driftwatch.Views.Console import ConsoleView
@@ -31,6 +37,143 @@ app = typer.Typer(
 console = Console()
 service = PipelineService()
 view = ConsoleView(console)
+
+
+@app.command("paypal-checkout")
+def paypal_checkout(
+    capture: str | None = typer.Option(
+        None,
+        "--capture",
+        help="Capture this approved sandbox order id.",
+    ),
+    client_id: str | None = typer.Option(
+        None,
+        "--client-id",
+        envvar="PAYPAL_SANDBOX_CLIENT_ID",
+        help="PayPal sandbox REST app client id.",
+    ),
+    client_secret: str | None = typer.Option(
+        None,
+        "--client-secret",
+        envvar="PAYPAL_SANDBOX_CLIENT_SECRET",
+        help="PayPal sandbox REST app secret.",
+    ),
+) -> None:
+    """Sell the Driftwatch workspace plan in the PayPal sandbox."""
+    if not client_id or not client_secret:
+        raise typer.BadParameter("set PAYPAL_SANDBOX_CLIENT_ID and PAYPAL_SANDBOX_CLIENT_SECRET")
+    checkout_client = PayPalCheckout(PayPalCheckoutConfig(client_id, client_secret))
+    try:
+        try:
+            if capture:
+                payment = checkout_client.capture(capture)
+                console.print(
+                    f"captured [bold]{payment.capture_id}[/] "
+                    f"({payment.status}) {payment.amount} {payment.currency}"
+                )
+                return
+            order = checkout_client.create_order()
+        except (PayPalCheckoutError, ValueError) as error:
+            console.print(f"[red]{error}[/]")
+            if "invalid_client" in str(error):
+                console.print(
+                    "Use the Client ID and Secret from a REST app on "
+                    "developer.paypal.com, under Apps & Credentials, with Sandbox selected."
+                )
+            raise typer.Exit(1) from None
+    finally:
+        checkout_client.close()
+    console.print(f"plan [bold]{order.plan}[/] {order.amount} {order.currency}")
+    console.print(f"order [bold]{order.order_id}[/]")
+    console.print(f"approve: {order.approve_url}")
+    console.print("After the sandbox buyer approves, capture with --capture ORDER_ID.")
+
+
+@app.command("paypal-showcase")
+def paypal_showcase(
+    cache_dir: Path = typer.Option(
+        Path(".cache"),
+        "--cache-dir",
+        help="Directory holding PayPal OpenAPI revisions and SDK source.",
+    ),
+    repo: Path = typer.Option(
+        Path("tests/fixtures/paypalRepo"),
+        "--repo",
+        help="Merchant repository to scan for PayPal API drift.",
+    ),
+    reviews_dir: Path = typer.Option(
+        Path(".cache/reviews"),
+        "--reviews-dir",
+        help="Review desk directory where findings JSON will be written.",
+    ),
+) -> None:
+    """Run the zero-database PayPal AI Hackathon showcase (SDK + Diff + AI + Scan + Sandbox)."""
+    try:
+        report = run_paypal_showcase(
+            cache_dir=cache_dir,
+            repo_path=repo,
+            reviews_dir=reviews_dir,
+        )
+    except FileNotFoundError as error:
+        console.print(f"[red]{error}[/]")
+        raise typer.Exit(1) from None
+    _render_paypal_showcase(report)
+
+
+def _render_paypal_showcase(report: PayPalShowcaseReport) -> None:
+    console.print(
+        f"[bold]1. PayPal Python Server SDK Surface Map[/]: "
+        f"{report.sdk_operations} operations ({report.sdk_bindings} symbol bindings)"
+    )
+    console.print(
+        f"[bold]2. PayPal Orders v2 OpenAPI Diff[/]: "
+        f"{report.spec_surfaces_before:,} -> {report.spec_surfaces_after:,} surfaces; "
+        f"{report.total_deltas} total changes ({report.operation_deltas} operation-level)"
+    )
+
+    ai_table = Table(title=f"3. Evidence-Grounded AI Classifications ({report.ai_mode})")
+    ai_table.add_column("severity")
+    ai_table.add_column("type")
+    ai_table.add_column("title", overflow="fold")
+    ai_table.add_column("grounded quote", overflow="fold")
+    ai_table.add_column("recipe")
+    for item in report.classifications:
+        ai_table.add_row(
+            item.severity,
+            item.change_type,
+            item.title,
+            item.cited_quote[:60],
+            item.recipe_kind,
+        )
+    console.print(ai_table)
+
+    scan_table = Table(title="4. PayPal Merchant Repository Findings")
+    scan_table.add_column("conf", justify="right")
+    scan_table.add_column("severity")
+    scan_table.add_column("type")
+    scan_table.add_column("location", overflow="fold")
+    scan_table.add_column("snippet", overflow="fold")
+    for finding in report.findings:
+        scan_table.add_row(
+            f"{finding.confidence:.3f}",
+            finding.severity,
+            finding.change_type,
+            f"{finding.usage.file_path}:{finding.usage.start_line}",
+            finding.usage.snippet[:70],
+        )
+    console.print(scan_table)
+    console.print(
+        f"findings written to [bold]{report.reviews_written_to}[/] for `driftwatch review`"
+    )
+
+    sb = report.sandbox_checkout
+    console.print(
+        f"[bold]5. PayPal Sandbox B2B Billing[/] ({sb.mode}): "
+        f"{sb.plan} {sb.amount} {sb.currency} via {sb.endpoint}"
+    )
+    if sb.order_id and sb.approve_url:
+        console.print(f"   order [bold]{sb.order_id}[/] -> approve: {sb.approve_url}")
+    console.print(f"   {sb.note}")
 
 
 @app.command("paypal-demo")
@@ -47,10 +190,12 @@ def paypal_demo(
         help="Clear PayPal watermarks and fetch fresh repository archives.",
     ),
 ) -> None:
-    """Run the real PayPal repository -> snapshot -> index demo."""
+    """Run the PayPal demo (uses PostgreSQL when configured, otherwise runs standalone showcase)."""
     configured_url = database_url or os.getenv("DRIFTWATCH_TEST_DATABASE_URL")
     if not configured_url:
-        raise typer.BadParameter("provide --database-url or set DRIFTWATCH_DATABASE_URL")
+        report = run_paypal_showcase()
+        _render_paypal_showcase(report)
+        return
     with psycopg.connect(configured_url) as connection:
         results = run_paypal_demo(connection, force_refresh=force_refresh)
     table = Table(title="PayPal pipeline demo")

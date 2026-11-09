@@ -30,8 +30,8 @@ PROVIDER_PACKAGES: dict[str, tuple[frozenset[str], frozenset[str], frozenset[str
     ),
     "paypal": (
         frozenset({"paypal-server-sdk", "paypalserversdk"}),
-        frozenset({"paypal-server-sdk"}),
-        frozenset({"api-m.paypal.com", "api.paypal.com"}),
+        frozenset({"paypal-server-sdk", "@paypal/paypal-server-sdk"}),
+        frozenset({"api-m.paypal.com", "api.paypal.com", "api-m.sandbox.paypal.com"}),
     ),
 }
 

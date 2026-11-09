@@ -392,13 +392,14 @@ import or a client binding before the attribute chain is even looked up**.
 A worked resolution:
 
 ```python
-import stripe as pay                                  # 1. alias table: pay -> stripe
-client = pay.StripeClient(api_key)                    # 2. client binding: client -> stripe
+import stripe as pay  # 1. alias table: pay -> stripe
+
+client = pay.StripeClient(api_key)  # 2. client binding: client -> stripe
 charge = client.charges.create(amount=1000, source=tok)
 #        ^ 3. flatten chain: client.charges.create -> stripe.charges.create
 #          4. Surface Map: api:stripe/op:post_v1_charges
 #          5. keyword arg `source=` -> .../param:source        (parameter hit)
-print(charge.source)                                  # 6. assignment tracking -> response-field hit
+print(charge.source)  # 6. assignment tracking -> response-field hit
 ```
 
 Confidence is a product of independent factors, any of which can veto by going to zero:
@@ -700,14 +701,23 @@ uv run driftwatch fix --repo tests/fixtures/sampleRepo \
                       --findings .cache/findings.json --out .cache/patch.diff
 ```
 
-PayPal uses the same flow:
+PayPal uses the same flow, or runs end-to-end in one command with no database required:
 
 ```bash
-uv run driftwatch derive-map --provider paypal \
-  --sdk-root .cache/PayPal-Python-Server-SDK --out .cache/paypal_surface_map.json
-uv run driftwatch diff-spec --provider paypal \
-  --before .cache/paypal_before.json --after .cache/paypal_after.json \
-  --out .cache/paypal_deltas.json
+# One-command PayPal AI Hackathon showcase:
+# 1. Derives 41 operations (82 bindings) from APIMATIC-generated PayPal-Python-Server-SDK
+# 2. Diffs PayPal Orders v2 OpenAPI revisions
+# 3. Classifies every operation change through the evidence-grounded AI boundary
+# 4. Scans tests/fixtures/paypalRepo and writes findings to .cache/reviews/paypal-findings.json
+# 5. Executes or prepares the PayPal Sandbox B2B workspace checkout ($49.00 USD)
+uv run driftwatch paypal-showcase
+
+# Optional: set live OpenAI and PayPal Sandbox credentials from developer.paypal.com
+export OPENAI_API_KEY="sk-..."
+export PAYPAL_SANDBOX_CLIENT_ID="your-real-sandbox-client-id"
+export PAYPAL_SANDBOX_CLIENT_SECRET="your-real-sandbox-secret"
+uv run driftwatch paypal-checkout
+uv run driftwatch paypal-checkout --capture ORDER_ID
 ```
 
 ### 3. Review findings in the browser

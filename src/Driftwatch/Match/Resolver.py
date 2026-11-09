@@ -49,6 +49,9 @@ _CLIENT_CONSTRUCTORS: dict[str, str] = {
     "AsyncOpenAI": "openai",
     "razorpay.Client": "razorpay",
     "Client": "razorpay",
+    "paypalserversdk.PaypalServersdkClient": "paypalserversdk",
+    "paypalserversdk.paypal_serversdk_client.PaypalServersdkClient": "paypalserversdk",
+    "PaypalServersdkClient": "paypalserversdk",
 }
 
 _IMPORT_Q = """
@@ -193,6 +196,9 @@ def _collect_imports(root: object, src: bytes, scope: _Scope) -> None:
 
 def _collect_clients(root: object, src: bytes, scope: _Scope) -> None:
     """Bind variables assigned from a provider client constructor to that SDK root."""
+    imported_roots = set(scope.roots.values()) | {
+        val.split(".", 1)[0] for val in scope.imported.values()
+    }
     for m in tsutil.matches(root, _ASSIGN_CALL_Q, "python"):  # type: ignore[arg-type]
         targets = m.get("target") or []
         callees = m.get("callee") or []
@@ -213,7 +219,7 @@ def _collect_clients(root: object, src: bytes, scope: _Scope) -> None:
             qualified = scope.imported.get(path)
             if qualified:
                 root_module = _CLIENT_CONSTRUCTORS.get(qualified)
-        if root_module is not None and root_module in scope.roots.values():
+        if root_module is not None and root_module in imported_roots:
             scope.clients[tsutil.text(targets[0], src)] = root_module
 
 
@@ -304,6 +310,21 @@ def _resolve_calls(
                         (f"kwarg:{kw_name}", "in_sdk_params" if known else "absent_from_sdk"),
                     )
                 )
+            for key_name, key_node in _dict_keys(args[0], src):
+                known = not known_params or key_name in known_params
+                out.append(
+                    _usage(
+                        f"{surface}/param:{key_name}",
+                        "param_dict_key",
+                        file_path,
+                        key_node,
+                        src,
+                        symbol,
+                        confidence if known else confidence * 0.9,
+                        len(surfaces),
+                        (f"dict_key:{key_name}", "in_sdk_params" if known else "absent_from_sdk"),
+                    )
+                )
     return out
 
 
@@ -380,7 +401,15 @@ def _resolve_response_reads(
 
 def _resolve_raw_http(root: object, src: bytes, file_path: str, smap: SurfaceMap) -> list[Usage]:
     """Resolve provider endpoints called over raw HTTP via a URL string literal."""
-    host = f"api.{smap.provider}.com"
+    from Driftwatch.Match.Prefilter import PROVIDER_PACKAGES
+    from Driftwatch.Surfaces import op_ref
+
+    hosts = PROVIDER_PACKAGES.get(smap.provider, (frozenset(), frozenset(), frozenset()))[2] or {
+        f"api.{smap.provider}.com",
+        f"api-m.{smap.provider}.com",
+        f"api-m.sandbox.{smap.provider}.com",
+    }
+    hosts = set(hosts) | {f"api-m.sandbox.{smap.provider}.com"}
     known_ops = {e.surface_ref for e in smap.entries}
     out: list[Usage] = []
     for m in tsutil.matches(root, _CALL_Q, "python"):  # type: ignore[arg-type]
@@ -393,11 +422,12 @@ def _resolve_raw_http(root: object, src: bytes, file_path: str, smap: SurfaceMap
             continue
         for child in args[0].named_children:
             url = tsutil.string_value(child, src)
-            if not url or host not in url:
+            if not url:
                 continue
-            path = url.split(host, 1)[1].split("?")[0].rstrip("/")
-            from Driftwatch.Surfaces import op_ref
-
+            matched_host = next((h for h in hosts if h in url), None)
+            if matched_host is None:
+                continue
+            path = url.split(matched_host, 1)[1].split("?")[0].rstrip("/")
             surface = op_ref(smap.provider, verb, path)
             if surface not in known_ops:
                 continue
@@ -436,16 +466,25 @@ def _dict_keys(args: object, src: bytes) -> list[tuple[str, object]]:
     out: list[tuple[str, object]] = []
     for child in args.named_children:  # type: ignore[attr-defined]
         value = child.child_by_field_name("value") if child.type == "keyword_argument" else child
-        if value is None or value.type != "dictionary":
-            continue
-        for pair in value.named_children:
-            if pair.type != "pair":
-                continue
-            key_node = pair.child_by_field_name("key")
-            key = tsutil.string_value(key_node, src) if key_node is not None else None
-            if key:
-                out.append((key, pair))
+        if value is not None:
+            _collect_dict_pairs(value, src, out)
     return out
+
+
+def _collect_dict_pairs(node: object, src: bytes, out: list[tuple[str, object]]) -> None:
+    """Recursively collect string keys from dictionary literals."""
+    if node.type != "dictionary":  # type: ignore[attr-defined]
+        return
+    for pair in node.named_children:  # type: ignore[attr-defined]
+        if pair.type != "pair":
+            continue
+        key_node = pair.child_by_field_name("key")
+        key = tsutil.string_value(key_node, src) if key_node is not None else None
+        if key:
+            out.append((key, pair))
+        val_node = pair.child_by_field_name("value")
+        if val_node is not None and val_node.type == "dictionary":
+            _collect_dict_pairs(val_node, src, out)
 
 
 def _resolve_literals(

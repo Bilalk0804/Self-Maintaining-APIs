@@ -31,13 +31,13 @@ symbols, while the OpenAPI index is used for version-to-version change detection
 class IndexDiffer(Protocol):
     def diff(self, before: SurfaceIndex, after: SurfaceIndex) -> list[RawDelta]: ...
 
+
 class EvidenceRetriever(Protocol):
     def retrieve(self, delta: RawDelta) -> list[Evidence]: ...
 
+
 class ChangeClassifier(Protocol):
-    def classify(
-        self, deltas: list[RawDelta], evidence: list[Evidence]
-    ) -> list[ChangeRecord]: ...
+    def classify(self, deltas: list[RawDelta], evidence: list[Evidence]) -> list[ChangeRecord]: ...
 ```
 
 Detection and interpretation are separate: the differ is deterministic, and the LLM only
@@ -59,17 +59,22 @@ HTTP failures are rejected rather than silently converted into successful eviden
 class DependencyScanner(Protocol):
     def scan(self, repo_root: Path) -> list[RepoDependency]: ...
 
+
 class CandidateGenerator(Protocol):
     def generate(self, repo_root: Path, probes: list[str]) -> list[CandidateFile]: ...
+
 
 class SymbolResolver(Protocol):
     language: str
 
     def resolve(self, src: bytes, surface_map: SurfaceMapView) -> list[ResolvedUsage]: ...
 
+
 class ConfidenceScorer(Protocol):
     def score(
-        self, usage: ResolvedUsage, change: ChangeRecord,
+        self,
+        usage: ResolvedUsage,
+        change: ChangeRecord,
         dependency: RepoDependency | None,
     ) -> ScoredFinding: ...
 ```
@@ -88,15 +93,15 @@ paths, so repositories that do not use the SDK are not silently excluded.
 class Codemod(Protocol):
     def plan(self, finding: Finding, recipe: MigrationRecipe, src: bytes) -> list[Edit]: ...
 
+
 class SandboxRunner(Protocol):
     def run(
         self, repo_root: Path, phase: str, command: list[str], allow_network: bool
     ) -> SandboxResult: ...
 
+
 class Publisher(Protocol):
-    def publish(
-        self, decision: GateDecision, patch: Patch | None
-    ) -> PublishedArtifact: ...
+    def publish(self, decision: GateDecision, patch: Patch | None) -> PublishedArtifact: ...
 ```
 
 Codemods return byte-range edits and never reformat a file. The sandbox verifies syntax,
